@@ -1,23 +1,44 @@
 #pragma once
 
+//hlsl2021 compat
 #ifdef __cplusplus
 #include "common.h"
 
-using float32_t = float;
+using float3 = glm::fvec3;
+using float4 = glm::fvec4;
+using float16_t3 = glm::u16vec3; //just for equivalent size
+using float16_t4 = glm::u16vec4;
 #endif
 
+#ifdef __cplusplus
+#pragma pack(push, 4)
+#endif
+
+struct ConstantBufferStruct
+{
+    float3 camPos;
+    float ct;
+    float3 lookAt;
+    float fov;
+};
 
 struct RayPayload
 {
-    float color;
+    float16_t3 color;
+    uint16_t padd;
 };
+
 
 struct Vert
 {
-    float33 pos;
-    float3 norm;
+    float3 pos;
 };
 struct Tringle
 {
     Vert verts[3];
 };
+
+#ifdef __cplusplus
+#pragma pack(pop, 4)
+#endif
+

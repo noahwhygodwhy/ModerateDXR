@@ -1,10 +1,27 @@
 #include "common.h"
+#include "shared.h"
 #include "DxrContext.hpp"
+#include "pixtras.hpp"
+
+#include "Raytracable.hpp"
+#include "Mesh.hpp"
+#include "Instance.hpp"
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
+static DxrContext* ctx;
+static ConstantBufferStruct* constants;
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow)
 {
+
+
+
+
+    HMODULE pixLib;
+
+    pixLib = LoadLibrary(GetLatestWinPixGpuCapturerPath_Cpp17().c_str());
+
+
 
     const uint defaultWidth = 800;
     const uint defaultHeight = 600;
@@ -28,98 +45,80 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
     hwnd = CreateWindow(registeredClass, L"", WS_OVERLAPPEDWINDOW|WS_VISIBLE, 0, 0, defaultWidth, defaultHeight, NULL, NULL, hInstance, NULL);
 
-    DxrContext ctx = DxrContext(defaultWidth, defaultHeight);
+    ctx = new DxrContext(hwnd, defaultWidth, defaultHeight);
+
+    vector<Raytracable*> models;
+    vector< D3D12_RESOURCE_BARRIER> blasBarriers;
+    //auto y = foo;
+    //void(*z)(Raytracable) = foo;
+    //auto x = [scene](void(*fn)(Raytracable r)) {std::for_each(scene.begin(), scene.end(), fn(r)); };
+
+    Mesh sphere = Mesh("sphere.obj");
+    models.push_back(&sphere);
+
+    for (Raytracable* r : models) r->CreateResources(ctx->device);
+    for (Raytracable* r : models) r->AddGeomSRV(ctx->device, ctx->descHeap);
+
+    ctx->ResetCommandList();
+    OutputDebugStringF("building blas5\n");
+    for (Raytracable* r : models) blasBarriers.push_back(r->BuildBLAS(ctx->device, ctx->commandList));
+
+    vector<Instance*> instances;
+    Instance iA(sphere, mat3x4(1));
+    instances.push_back(&iA);
+    Instance iB(sphere, glm::transpose(glm::translate(mat4x4(1), fvec3(1, 1, 1))), 2);
+    instances.push_back(&iB);
+
+    vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs;
+    for (Instance* i : instances) instanceDescs.push_back(i->GetInstanceDesc());
 
     
+    ctx->commandList->ResourceBarrier((uint32_t)blasBarriers.size(), blasBarriers.data());
+    ctx->ExecuteCommandList();
+    ctx->Flush();
+    //scan
+
+    constants = (ConstantBufferStruct*)ctx->MapConstantBuffer();
+
+    constants->camPos = float3(0, 0, -5);
+    constants->fov = glm::radians(90.0f);
+    constants->lookAt = float3(0, 0, 0);
+    constants->ct = 0.0f;
+
+
+    //TODO: if the number of instances changes, this will need to be redone
+    ctx->CreateTlasResources(instanceDescs);
+
+
     MSG msg;
-
-    // Main message loop:
-    while (GetMessage(&msg, nullptr, 0, 0))
+    msg.message = WM_NULL;
+    while (msg.message != WM_QUIT)
     {
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
-    }
 
+        if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
+        {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+    }
     return (int) msg.wParam;
 }
 
-
-
-////
-////  FUNCTION: MyRegisterClass()
-////
-////  PURPOSE: Registers the window class.
-////
-//ATOM MyRegisterClass(HINSTANCE hInstance)
-//{
-//    WNDCLASSEXW wcex;
-//
-//    wcex.cbSize = sizeof(WNDCLASSEX);
-//
-//    wcex.style          = CS_HREDRAW | CS_VREDRAW;
-//    wcex.lpfnWndProc    = WndProc;
-//    wcex.cbClsExtra     = 0;
-//    wcex.cbWndExtra     = 0;
-//    wcex.hInstance      = hInstance;
-//    wcex.hIcon          = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_MODERATEDXR));
-//    wcex.hCursor        = LoadCursor(nullptr, IDC_ARROW);
-//    wcex.hbrBackground  = (HBRUSH)(COLOR_WINDOW+1);
-//    wcex.lpszMenuName   = MAKEINTRESOURCEW(IDC_MODERATEDXR);
-//    wcex.lpszClassName  = szWindowClass;
-//    wcex.hIconSm        = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
-//
-//    return RegisterClassExW(&wcex);
-//}
-//
-////
-////   FUNCTION: InitInstance(HINSTANCE, int)
-////
-////   PURPOSE: Saves instance handle and creates main window
-////
-////   COMMENTS:
-////
-////        In this function, we save the instance handle in a global variable and
-////        create and display the main program window.
-////
-//BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
-//{
-//   hInst = hInstance; // Store instance handle in our global variable
-//
-//   HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
-//      CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
-//
-//   if (!hWnd)
-//   {
-//      return FALSE;
-//   }
-//
-//   ShowWindow(hWnd, nCmdShow);
-//   UpdateWindow(hWnd);
-//
-//   return TRUE;
-//}
-
-//
-//  FUNCTION: WndProc(HWND, UINT, WPARAM, LPARAM)
-//
-//  PURPOSE: Processes messages for the main window.
-//
-//  WM_COMMAND  - process the application menu
-//  WM_PAINT    - Paint the main window
-//  WM_DESTROY  - post a quit message and return
-//
-//
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     switch (message)
     {
-    case WM_QUIT:
-        exit(0);
-        break;
     case WM_SIZE:
     case WM_SIZING:
+        //TODO:
         break;
+    case WM_PAINT:
+        //TODO: ct?
+        ctx->Render(0);
+        break;
+    case WM_QUIT:
     case WM_DESTROY:
+        //OutputDebugStringF("exiting?\n");
         exit(0);
         break;
     default:
