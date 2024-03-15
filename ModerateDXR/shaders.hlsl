@@ -19,7 +19,7 @@ void RayGeneration()
     float3 forward = normalize(constants.lookAt - constants.camPos);
     float3 worldUp = float3(0, 1, 0);
     float3 right = cross(forward, worldUp);
-    float3 up = cross(right, forward);
+    float3 up = cross(forward, right);
      
     
     
@@ -71,7 +71,7 @@ float3 getWorldSpaceNormal()
     float3 ba = b - a;
     float3 ca = c - a;
     float3 normal = normalize(cross(ba, ca));
-    return normal;//    mul(normal, ((float3x3) ObjectToWorld4x3()));
+    return mul(normal, ((float3x3) ObjectToWorld4x3()));
 }
 
 
@@ -110,10 +110,39 @@ void ch_red(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes a
 }
 
 [shader("closesthit")]
+void ch_checkerboard(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes attrib)
+{
+    (void)attrib;
+    //const float  = 10;
+    
+    float3 pos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
+
+    int3 xyz = (int3)select(pos < 1, pos -1, pos);
+    bool3 evenSquare = xyz%2;
+    
+    bool colorIdx = evenSquare.x ^ evenSquare.y ^ evenSquare.z;// ((xyz.x + xyz.y)%2);
+    // colorIdx = colorIdx | (xyz.z%2);
+    
+    // int3 xyz = pos < 1 ? pos : pos-1;
+    // xy.x = pos.x < 0 ? pos.x - 1.0f : pos.x;
+    // xy.y = pos.z < 0 ? pos.z - 1.0f : pos.z;
+    
+    // bool colorIdx = 1;//((xy.x + xy.y) % 2) ? true : false;
+
+
+    
+
+    float16_t3 color = colorIdx ? float16_t3(0.9, 0.9, 0.9) : float16_t3(0.4, 0.4, 0.4);
+
+    payload.color = color;
+    return;
+}
+ 
+
+[shader("closesthit")]
 void ch_mirror(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes attrib)
 {
     (void) attrib;
-    
     
     float3 pos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
     float3 normal = getWorldSpaceNormal();
@@ -127,14 +156,13 @@ void ch_mirror(inout RayPayload payload, in BuiltInTriangleIntersectionAttribute
     
     RayPayload payload2 = (RayPayload) 0;
     TraceRay(scene, RAY_FLAG_NONE, 0xFF, 0, 0, 0, ray, payload2);
-    payload.color = (payload2.color * 0.95) + float16_t3(0.05, 0.05, 0.05);
+    payload.color = (payload2.color * 0.7) + float16_t3(0.3, 0.3, 0.3);
     return;
+}
 
-   // (void) attrib;
-    //payload.color = float16_t3(0.0, 0.0, 1.0);
-    //return;
-    //payload.color = float16_t3(1, 0, 0);
-    //return;
-    //Tringle tri = geomdata[InstanceID()][PrimitiveIndex()];
-    //float3 pos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
+[shader("closesthit")]
+void ch_skybox(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes attrib)
+{
+    (void)attrib;
+    payload.color = float16_t3(0.211765, 0.780392, 0.94902);
 }

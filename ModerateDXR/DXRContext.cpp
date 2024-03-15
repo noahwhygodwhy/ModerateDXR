@@ -84,6 +84,9 @@ const static HitGroupData hgdata[] =
     HitGroupData(L"normalcolors"),
     HitGroupData(L"red"),
     HitGroupData(L"mirror"),
+    HitGroupData(L"checkerboard"),
+    HitGroupData(L"skybox"),
+
 };
 void DxrContext::BuildPipelineStateObject()
 {
@@ -119,9 +122,6 @@ void DxrContext::BuildPipelineStateObject()
     TIF(device->CreateCommittedResource(&shaderBuffProps, D3D12_HEAP_FLAG_NONE, &shaderBuffDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&shaderBuffer)));
     shaderBuffer->SetName(L"shaderBuffer");
 
-
-
-
     ComPtr<ID3D12StateObjectProperties> stateprops;
     pso->QueryInterface(IID_PPV_ARGS(&stateprops));
 
@@ -134,22 +134,13 @@ void DxrContext::BuildPipelineStateObject()
     memcpy(uploadPointer, stateprops->GetShaderIdentifier(L"Miss"), D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
     uploadPointer += D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
 
-    //memcpy(uploadPointer, stateprops->GetShaderIdentifier(L"hg_normalcolors"), D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
-    //uploadPointer += D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES; //D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
-    //memcpy(uploadPointer, stateprops->GetShaderIdentifier(L"hg_red"), D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
-    //uploadPointer += D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES; //D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
-
-
     for (uint i = 0; i < _countof(hgdata); i++)
     {
         memcpy(uploadPointer, stateprops->GetShaderIdentifier(hgdata[i].hgName.data()), D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
         uploadPointer += D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES; //D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
     }
 
-    //memcpy(static_cast<char*>(uploadPointer) + (D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT * 2), stateprops->GetShaderIdentifier(L"hg_normalcolor"), D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
     shaderBuffer->Unmap(0, nullptr);
-
-
 }
 
 

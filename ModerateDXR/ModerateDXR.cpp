@@ -53,8 +53,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     //void(*z)(Raytracable) = foo;
     //auto x = [scene](void(*fn)(Raytracable r)) {std::for_each(scene.begin(), scene.end(), fn(r)); };
 
+    Mesh cube = Mesh("cube.obj");
+    models.push_back(&cube);
     Mesh sphere = Mesh("sphere.obj");
     models.push_back(&sphere);
+
 
     for (Raytracable* r : models) r->CreateResources(ctx->device);
     for (Raytracable* r : models) r->AddGeomSRV(ctx->device, ctx->descHeap);
@@ -69,6 +72,20 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     Instance iB(sphere, glm::transpose(glm::translate(mat4x4(1), fvec3(1, 1, 1))), 2);
     instances.push_back(&iB);
 
+    Instance instanceCube(
+        cube,
+        glm::transpose(
+            glm::scale(
+                glm::translate(mat4x4(1.0f), fvec3(0, -4.5, 0)),
+                fvec3(100, 1, 100)
+            )
+        ),
+    3);
+    instances.push_back(&instanceCube);
+
+
+
+
     vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs;
     for (Instance* i : instances) instanceDescs.push_back(i->GetInstanceDesc());
 
@@ -80,7 +97,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
     constants = (ConstantBufferStruct*)ctx->MapConstantBuffer();
 
-    constants->camPos = float3(0, 0, -5);
+    constants->camPos = float3(0, 0, 5);
     constants->fov = glm::radians(90.0f);
     constants->lookAt = float3(0, 0, 0);
     constants->ct = 0.0f;

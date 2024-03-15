@@ -66,3 +66,5 @@ inline void ThrowIfError(HRESULT hr, const char* errorMessage, uint line, const 
 #define TIE(hr, txt) ThrowIfError(hr, txt, __LINE__, __FILE__);
 
 #define SAFE_RELEASE(p) if (p) (p)->Release() //unless it doesn't have release ugh
+
+#define printvec(v) glm::to_string(v).c_str()

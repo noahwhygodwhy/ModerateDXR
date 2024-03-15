@@ -77,15 +77,23 @@ D3D12_RESOURCE_BARRIER Mesh::BuildBLAS(ComPtr<ID3D12Device10> device, ComPtr<ID3
 void Mesh::processMesh(aiMesh* mesh, const aiScene* scene)
 {
 
-    //TODO: can i just memcpy? I don't know if the format is the same
+    //TODO: make an index buffer
+    vector<fvec3> unindexedVerts;
+
     for (unsigned int i = 0; i < mesh->mNumVertices; i++)
     {
-
         fvec3 newVert = fvec3(mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z);
-        verts.push_back(newVert);
+        unindexedVerts.push_back(newVert);
     }
-    // process indices
-    // process material
+
+    for (uint j = 0; j < mesh->mNumFaces; j++)
+    {
+        aiFace f = mesh->mFaces[j];
+        for (uint k = 0; k < f.mNumIndices; k++)
+        {
+            verts.push_back(unindexedVerts[f.mIndices[k]]);
+        }
+    }
     if (mesh->mMaterialIndex >= 0)
     {
         // TODO: 
