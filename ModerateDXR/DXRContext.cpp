@@ -44,14 +44,26 @@ void DxrContext::CreateScreenSizedResources()
     // goes on starting at index 1, 2, 3, ... ect
     device->CreateUnorderedAccessView(framebuffer.Get(), nullptr, &vd, descHeap->GetCPUDescriptorHandleForHeapStart());
 }
-void DxrContext::Resize(uint width, uint height)
+
+void DxrContext::DoResize()
 {
-    // Flush(); //TODO: ?
+    if(!this->backbuffer)
+    {
+        return;
+    }
+    auto oldDesc = this->backbuffer->GetDesc();
+    if (oldDesc.Width != this->screenWidth || oldDesc.Height != this->screenHeight)
+    {
+        Flush();
+        this->backbuffer.Reset();
+        swapChain->ResizeBuffers(2, this->screenWidth, this->screenHeight, DXGI_FORMAT_R16G16B16A16_FLOAT, 0);
+        this->CreateScreenSizedResources();
+    }
+}
+void DxrContext::SetResize(uint width, uint height)
+{
     this->screenWidth = width;
     this->screenHeight = height;
-    swapChain->ResizeBuffers(2, this->screenWidth, this->screenHeight, DXGI_FORMAT_R16G16B16A16_FLOAT, 0);
-    this->CreateScreenSizedResources();
-
 }
 
 void DxrContext::BuildRootSignature()
@@ -200,8 +212,9 @@ DxrContext::DxrContext(HWND hwnd, uint initWidth, uint initHeight)
     CD3DX12_RESOURCE_DESC cbDesc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(ConstantBufferStruct));
     TIF(device->CreateCommittedResource(&cbProps, D3D12_HEAP_FLAG_NONE, &cbDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&constantBuffer)));
     constantBuffer->SetName(L"constantBuffer");
-
+    constantBuffer->Map(0, nullptr, (void**)&this->constants);
 }
+
 
 void* DxrContext::MapConstantBuffer()
 {
@@ -215,6 +228,16 @@ DxrContext::~DxrContext()
 {
 }
 
+void DxrContext::UploadInstanceDescs(vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs)
+{
+    //TODO: check the list hasn't changed in size?
+
+    void* uploadPointer;
+    instanceBuffer->Map(0, nullptr, &uploadPointer);
+    memcpy(uploadPointer, instanceDescs.data(), instanceDescs.size() * sizeof(D3D12_RAYTRACING_INSTANCE_DESC));
+    instanceBuffer->Unmap(0, nullptr);
+}
+
 void DxrContext::CreateTlasResources(vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs)
 {
 ;
@@ -222,10 +245,6 @@ void DxrContext::CreateTlasResources(vector<D3D12_RAYTRACING_INSTANCE_DESC> inst
     CD3DX12_RESOURCE_DESC instanceDesc = CD3DX12_RESOURCE_DESC::Buffer(instanceDescs.size() * sizeof(D3D12_RAYTRACING_INSTANCE_DESC));
     TIF(device->CreateCommittedResource(&instanceProps, D3D12_HEAP_FLAG_NONE, &instanceDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&instanceBuffer)));
     instanceBuffer->SetName(L"instancebuffer");
-    void* uploadPointer;
-    instanceBuffer->Map(0, nullptr, &uploadPointer);
-    memcpy(uploadPointer, instanceDescs.data(), instanceDescs.size() * sizeof(D3D12_RAYTRACING_INSTANCE_DESC));
-    instanceBuffer->Unmap(0, nullptr);
 
     this->tlasInput = {
         .Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL,
@@ -328,11 +347,12 @@ void DxrContext::Present()
 
 void DxrContext::Flush()
 {
+    HANDLE h = nullptr;
     static UINT64 value = 1;
-    commandQueue->Signal(fence.Get(), value);
-    fence->SetEventOnCompletion(value++, nullptr);
+    commandQueue->Signal(fence.Get(), ++value);
+    fence->SetEventOnCompletion(value, h);
+    WaitForSingleObject(h, INFINITE);
 }
-
 
 void DxrContext::Render(float ct)
 {
@@ -344,4 +364,5 @@ void DxrContext::Render(float ct)
     this->ExecuteCommandList();
     this->Flush();
     this->Present();
+    this->DoResize();
 }

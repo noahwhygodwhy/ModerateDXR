@@ -1,5 +1,6 @@
 #pragma once
 #include "common.h"
+#include "shared.h"
 
 
 
@@ -24,7 +25,7 @@ public:
 	DxrContext(HWND hwnd, uint initWidth, uint initHeight);
 	~DxrContext();
 	void* MapConstantBuffer();
-	void Resize(uint initWidth, uint initHeight);
+	void SetResize(uint initWidth, uint initHeight);
 	void CreateScreenSizedResources();
 	void BuildTlas();
 	void DispatchRays();
@@ -33,15 +34,23 @@ public:
 	void ResetCommandList();
 	void ExecuteCommandList();
 	void Flush();
+	void FullFlush();
 	void Render(float ct);
 	void CreateTlasResources(vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs);
+	void UploadInstanceDescs(vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs);
 	ComPtr<ID3D12Device10> device;
 	ComPtr<ID3D12GraphicsCommandList4> commandList;
 	ComPtr<ID3D12DescriptorHeap> descHeap;
+	ConstantBufferStruct* constants;
+
+	std::chrono::steady_clock::time_point startTimePoint;
+	std::chrono::steady_clock::time_point lastFrameTimePoint;
 private:
+	void DoResize();
 	uint32_t frameNumber = 0;
 	uint32_t screenWidth;
 	uint32_t screenHeight;
+
 
 	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS tlasInput;
 
