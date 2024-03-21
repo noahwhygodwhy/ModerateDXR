@@ -14,6 +14,8 @@ using float16_t4 = glm::u16vec4;
 #pragma pack(push, 4)
 #endif
 
+//#define MAX_RECURSION_LAYERS 16
+//#define PI 3.14159265f
 struct ConstantBufferStruct
 {
     float3 camPos;
@@ -33,7 +35,7 @@ struct Vert
 {
     float3 pos;
 };
-struct Tringle
+struct Tringlex
 {
     Vert verts[3];
 };

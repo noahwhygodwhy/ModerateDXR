@@ -45,25 +45,25 @@ void DxrContext::CreateScreenSizedResources()
     device->CreateUnorderedAccessView(framebuffer.Get(), nullptr, &vd, descHeap->GetCPUDescriptorHandleForHeapStart());
 }
 
-void DxrContext::DoResize()
+void DxrContext::DoResize(float ct)
 {
-    if(!this->backbuffer)
-    {
-        return;
-    }
-    auto oldDesc = this->backbuffer->GetDesc();
-    if (oldDesc.Width != this->screenWidth || oldDesc.Height != this->screenHeight)
-    {
-        Flush();
-        this->backbuffer.Reset();
-        swapChain->ResizeBuffers(2, this->screenWidth, this->screenHeight, DXGI_FORMAT_R16G16B16A16_FLOAT, 0);
-        this->CreateScreenSizedResources();
-    }
+    if(!this->backbuffer) {return;}
+    Flush();
+    OutputDebugStringF("do resize\n %u, %u\n", this->newWidth, this->newHeight);
+    this->screenHeight = newHeight;
+    this->screenWidth = newWidth;
+    this->backbuffer.Reset();
+    swapChain->ResizeBuffers(2, this->screenWidth, this->screenHeight, DXGI_FORMAT_R16G16B16A16_FLOAT, 0);
+    this->CreateScreenSizedResources();
+    this->needResize = false;
+    
 }
 void DxrContext::SetResize(uint width, uint height)
 {
-    this->screenWidth = width;
-    this->screenHeight = height;
+    OutputDebugStringF("set resize\n %u, %u\n", width, height);
+    this->newWidth = width;
+    this->newHeight = height;
+    this->needResize = true;
 }
 
 void DxrContext::BuildRootSignature()
@@ -95,10 +95,9 @@ const static HitGroupData hgdata[] =
 {
     HitGroupData(L"normalcolors"),
     HitGroupData(L"red"),
-    HitGroupData(L"mirror"),
     HitGroupData(L"checkerboard"),
+    HitGroupData(L"mirror"),
     HitGroupData(L"skybox"),
-
 };
 void DxrContext::BuildPipelineStateObject()
 {
@@ -111,7 +110,7 @@ void DxrContext::BuildPipelineStateObject()
     D3D12_GLOBAL_ROOT_SIGNATURE rootsigDesc = { .pGlobalRootSignature = rootSignature.Get() };
     D3D12_STATE_SUBOBJECT rootsigSO = { .Type = D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, .pDesc = &rootsigDesc };
 
-    D3D12_RAYTRACING_PIPELINE_CONFIG pipelinecfgDesc = { .MaxTraceRecursionDepth = 4 };
+    D3D12_RAYTRACING_PIPELINE_CONFIG pipelinecfgDesc = { .MaxTraceRecursionDepth = 30 };
     D3D12_STATE_SUBOBJECT pipelinecfgSO = { .Type = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG, .pDesc = &pipelinecfgDesc };
 
     vector<D3D12_STATE_SUBOBJECT> subobjects = { librarySO, shadercfgSO, rootsigSO, pipelinecfgSO };
@@ -160,7 +159,8 @@ DxrContext::DxrContext(HWND hwnd, uint initWidth, uint initHeight)
 {
     this->screenWidth = initWidth;
     this->screenHeight = initHeight;
-    
+    this->newWidth = newWidth;
+    this->newHeight = initHeight;
     ComPtr<IDXGIFactory4> factory4;
     TIF(CreateDXGIFactory2(0, IID_PPV_ARGS(&factory4)));
     TIF(factory4->QueryInterface(IID_PPV_ARGS(&factory)));
@@ -328,7 +328,7 @@ void DxrContext::DispatchRays()
 void DxrContext::CopyFramebuffer()
 {
     uint a = swapChain->GetCurrentBackBufferIndex();
-    swapChain->GetBuffer(a, IID_PPV_ARGS(&backbuffer));
+    TIF(swapChain->GetBuffer(a, IID_PPV_ARGS(&backbuffer)));
     D3D12_RESOURCE_BARRIER barriers[] = { 
         D3D12_RESOURCE_BARRIER{.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION, .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE, .Transition = {.pResource = framebuffer.Get(), .StateBefore = D3D12_RESOURCE_STATE_COMMON, .StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE}},
         D3D12_RESOURCE_BARRIER{.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION, .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE, .Transition = {.pResource = backbuffer.Get(), .StateBefore = D3D12_RESOURCE_STATE_PRESENT, .StateAfter = D3D12_RESOURCE_STATE_COPY_DEST}},
@@ -348,10 +348,10 @@ void DxrContext::Present()
 void DxrContext::Flush()
 {
     HANDLE h = nullptr;
-    static UINT64 value = 1;
-    commandQueue->Signal(fence.Get(), ++value);
-    fence->SetEventOnCompletion(value, h);
-    WaitForSingleObject(h, INFINITE);
+    TIF(commandQueue->Signal(fence.Get(), this->fenceValue));
+    TIF(fence->SetEventOnCompletion(this->fenceValue, h));
+    WaitForSingleObjectEx(h, INFINITE, false);
+    this->fenceValue++;
 }
 
 void DxrContext::Render(float ct)
@@ -361,8 +361,41 @@ void DxrContext::Render(float ct)
     this->BuildTlas();
     this->DispatchRays();
     this->CopyFramebuffer();
+
+    this->swapChainEvent = this->swapChain->GetFrameLatencyWaitableObject();
+
     this->ExecuteCommandList();
     this->Flush();
     this->Present();
-    this->DoResize();
+
+    this->Flush();
+    //WaitForSingleObjectEx(swapChainEvent, INFINITE, FALSE);
+    if(this->needResize) { this->DoResize(ct); }
+    this->Flush();
+}
+
+void DxrContext::alterInstanceTransform(uint index, mat4x4 tx)
+{
+    mat3x4 oldTransform;
+    for (uint i = 0; i < 3; i++)
+    {
+        for (uint j = 0; j < 4; j++)
+        {
+            oldTransform[i][j] = instanceDescs[index].Transform[i][j];
+        }
+    }
+    mat4x4 full = transpose(oldTransform);
+    full[3][3] = 1.0f;
+    full = full * tx; //todo order of this?
+
+    float q = full[3][3];
+    mat3x4 newTransform = transpose(full) / q;
+
+    for (uint i = 0; i < 3; i++)
+    {
+        for (uint j = 0; j < 4; j++)
+        {
+            instanceDescs[index].Transform[i][j] = newTransform[i][j];
+        }
+    }
 }

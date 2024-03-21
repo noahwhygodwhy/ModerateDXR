@@ -7,20 +7,50 @@
 #include "Mesh.hpp"
 #include "Instance.hpp"
 
+#include <functional>
+//#include "../imgui/imgui.h"
+//#include "../imgui/backends/imgui_impl_win32.h"
+//#include "../imgui/backends/imgui_impl_dx12.h"
+
+
+
+//void startImgui(HWND hwnd, DxrContext ctx)
+//{
+//    IMGUI_CHECKVERSION();
+//    ImGui::CreateContext();
+//    ImGuiIO& io = ImGui::GetIO();
+//    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+//    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+//    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // IF using Docking Branch
+//
+//    // Setup Platform/Renderer backends
+//    ImGui_ImplWin32_Init(YOUR_HWND);
+//
+//    ImGui_ImplDX12_Init(YOUR_D3D_DEVICE, NUM_FRAME_IN_FLIGHT, YOUR_RENDER_TARGET_DXGI_FORMAT,
+//        YOUR_SRV_DESC_HEAP,
+//        // You'll need to designate a descriptor from your descriptor heap for Dear ImGui to use internally for its font texture's SRV
+//        YOUR_CPU_DESCRIPTOR_HANDLE_FOR_FONT_SRV,
+//        YOUR_GPU_DESCRIPTOR_HANDLE_FOR_FONT_SRV);
+//}
+
+
+struct WindowUserData
+{
+    DxrContext* ctx;
+    function<void(HWND hwnd)>* wm_paint_fn;
+
+};
+
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
 //static DxrContext* ctx;
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow)
 {
 
-
-
-
-
+#if _DEBUG
     HMODULE pixLib = LoadLibrary(GetLatestWinPixGpuCapturerPath_Cpp17().c_str());
-
-
-
+#endif
     const uint defaultWidth = 800;
     const uint defaultHeight = 600;
 
@@ -43,15 +73,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
     DxrContext* ctx = new DxrContext(hwnd, defaultWidth, defaultHeight);
     
-    
-    SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR) ctx);
 
 
 
     vector<Raytracable*> models;
     vector< D3D12_RESOURCE_BARRIER> blasBarriers;
     vector<Instance*> instances;
-    vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs;
+
+
+
 
     Mesh cube = Mesh("cube.obj");
     models.push_back(&cube);
@@ -67,10 +97,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
     for (Raytracable* r : models) blasBarriers.push_back(r->BuildBLAS(ctx->device, ctx->commandList));
 
-    Instance iCapy(capy, transpose(scale(translate(rotate(mat4x4(1), radians(45.0f), fvec3(0, 1, 0)), fvec3(0, -3, 0)), fvec3(0.5, 0.5, 0.5))));
+    Instance iCapy(capy, transpose(scale(translate(rotate(mat4x4(1), radians(45.0f), fvec3(0, 1, 0)), fvec3(-1, -3, 0)), fvec3(0.5, 0.5, 0.5))), 2);
     instances.push_back(&iCapy);
-    Instance iB(cube, glm::transpose(glm::translate(mat4x4(1), fvec3(0, 0, -2))), 2);
-    instances.push_back(&iB);
+    Instance iCapy2(capy, transpose(scale(translate(rotate(mat4x4(1), radians(45.0f), fvec3(0, 1, 0)), fvec3(1, -3, 0)), fvec3(0.5, 0.5, 0.5))), 0);
+    instances.push_back(&iCapy2);
+ /*   Instance iB(cube, glm::transpose(glm::translate(scale(mat4x4(1), fvec3(5)), fvec3(0, 0, -10))), 2);
+    instances.push_back(&iB);*/
     Instance instanceCube(
         cube,
         glm::transpose(
@@ -79,10 +111,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 fvec3(100, 1, 100)
             )
         ),
-    3);
+    2);
     instances.push_back(&instanceCube);
 
-    for (Instance* i : instances) instanceDescs.push_back(i->GetInstanceDesc());
+    for (Instance* i : instances) ctx->instanceDescs.push_back(i->GetInstanceDesc());
 
     ctx->commandList->ResourceBarrier((uint32_t)blasBarriers.size(), blasBarriers.data());
     ctx->ExecuteCommandList();
@@ -90,43 +122,21 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
     ctx->constants->camPos = float3(0, 1, 5);
     ctx->constants->fov = glm::radians(90.0f);
-    ctx->constants->lookAt = float3(0, 0, 0);
+    ctx->constants->lookAt = float3(0, 0.5, 0);
     ctx->constants->ct = 0.0f;
+    //ctx->constants->numSamples = 64;
 
     //TODO: if the number of instances changes, this will need to be redone
-    ctx->CreateTlasResources(instanceDescs);
+    ctx->CreateTlasResources(ctx->instanceDescs);
 
 
     ctx->startTimePoint = std::chrono::high_resolution_clock::now();
     ctx->lastFrameTimePoint = std::chrono::high_resolution_clock::now();
 
-    MSG msg;
-    msg.message = WM_NULL;
-    while (msg.message != WM_QUIT)
-    { 
-        
-        while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
-        {
-            TranslateMessage(&msg);
-            OutputDebugStringF("%u\t0x%08x\n", msg.message, msg.message);
+    function<void(HWND hwnd)> wm_paint_fn = [ctx, &instances](HWND hwnd) {
 
-            if (msg.message == WM_SIZE)
-            {
-                DispatchMessage(&msg);
-                break;
-                ;// OutputDebugStringF("width%u, height%u\n", LODWORD(msg.lParam), HIDWORD(msg.lParam));
-            }
-            DispatchMessage(&msg);
-        }
-        PostMessage(hwnd, WM_PAINT, 0, 0);
-
-        RECT rect;
-        //Getrect
-        GetClientRect(hwnd, &rect);
-        UINT width = rect.right - rect.left;
-        UINT height = rect.bottom - rect.top;
-        ctx->SetResize(width, height);
         auto nowTimePoint = std::chrono::high_resolution_clock::now();
+
 
         auto cTDurr = std::chrono::duration<double>(nowTimePoint - ctx->startTimePoint);
         auto dTDurr = std::chrono::duration<double>(nowTimePoint - ctx->lastFrameTimePoint);
@@ -136,12 +146,39 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         float ct = float(cTDurr.count());
         float dt = float(dTDurr.count());
 
-        iCapy.transform = glm::rotate(iCapy.transform, radians(90.0f) * dt, fvec3(0, 1, 0));
-        instanceDescs[0] = iCapy.GetInstanceDesc();
 
+        //ctx->constants->camPos = float3(sin(ct) * 5, 1, cos(ct) * 5);
+        ctx->UploadInstanceDescs(ctx->instanceDescs);
 
-        ctx->UploadInstanceDescs(instanceDescs);
+        //ctx->alterInstanceTransform(0, glm::rotate(mat4(1), radians(90.0f) * dt, fvec3(0, 1, 0)));;
+        //iCapy.transform = glm::rotate(iCapy.transform, radians(90.0f) * dt, fvec3(0, 1, 0));
+        // 
+        //auto g = ctx->instanceDescs[0].Transform;
+        //glm::mat3x4(ctx->instanceDescs[0].Transform);
+
         ctx->Render(ct);
+        };
+
+
+
+    WindowUserData wud;
+    wud.ctx = ctx;
+    wud.wm_paint_fn = &wm_paint_fn;
+    //LRESULT(__stdcall * y)(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) = WndProc;
+    //auto wm_paint_fn = (void*)(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {};
+
+    SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)&wud);
+
+    MSG msg;
+    msg.message = WM_NULL;
+    while (msg.message != WM_QUIT)
+    { 
+        while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
+        {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+        PostMessage(hwnd, WM_PAINT, 0, 0);
     }
     return (int) msg.wParam;
 }
@@ -151,30 +188,28 @@ static bool firstSize = true;
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 
-    DxrContext* ctx = (DxrContext*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
+    //DxrContext* ctx = (DxrContext*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
+    WindowUserData* wud = (WindowUserData*) GetWindowLongPtr(hwnd, GWLP_USERDATA);
+    //TODO: make this userdata a lambda lmao
+
     switch (message)
     {
     case WM_CREATE:
-        OutputDebugStringF("create %u, height %u\n", LODWORD(lParam), HIDWORD(lParam));
+        //OutputDebugStringF("create %u, height %u\n", LODWORD(lParam), HIDWORD(lParam));
         break;
     case WM_SIZE:
+        break;
+    case WM_EXITSIZEMOVE:
         {
-        if (firstSize) //god i hate this
-        {
-            firstSize = false;
-            break;
-        }
-        RECT r;
-        GetClientRect(hwnd, &r);
-        uint w = r.right - r.left;
-        uint h = r.bottom - r.top;
-        //if(ctx)
-            //ctx->SetResize(w, h);
-        //OutputDebugStringF("size width %u, height %u\n", LODWORD(lParam), HIDWORD(lParam));
+            RECT rect;
+            GetClientRect(hwnd, &rect);
+            UINT width = rect.right - rect.left;
+            UINT height = rect.bottom - rect.top;
+            //wud->ctx->SetResize(width, height);
         }
         break;
     case WM_PAINT:
-        OutputDebugStringF("paint %u, height %u\n", LODWORD(lParam), HIDWORD(lParam));
+        wud->wm_paint_fn->operator()(hwnd);
         break;
     case WM_QUIT:
     case WM_DESTROY:

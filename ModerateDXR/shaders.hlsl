@@ -74,12 +74,16 @@ float3 getWorldSpaceNormal()
     return mul(normal, ((float3x3) ObjectToWorld4x3()));
 }
 
+float3 distanceColor()
+{
+    float i = frac(RayTCurrent());
+    return float3(i, i, i);
+}
+
 
 [shader("closesthit")]
 void ch_normalcolors(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes attrib)
 {
-    (void) attrib;
-
 
     Tringle tri = geomdata[InstanceID()][PrimitiveIndex()];
     //float3 pos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
@@ -112,29 +116,51 @@ void ch_red(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes a
 [shader("closesthit")]
 void ch_checkerboard(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes attrib)
 {
-    (void)attrib;
-    //const float  = 10;
     
-    float3 pos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
-
-    int3 xyz = (int3)select(pos < 1, pos -1, pos);
-    bool3 evenSquare = xyz%2;
+    // payload.color = distanceColor();
+    // payload.color[InstanceID()] = 1.0;
+    // return;
+    Tringle tri = geomdata[InstanceID()][PrimitiveIndex()];
+    //float3 pos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
     
-    bool colorIdx = evenSquare.x ^ evenSquare.y ^ evenSquare.z;// ((xyz.x + xyz.y)%2);
-    // colorIdx = colorIdx | (xyz.z%2);
+    float3 a = tri.verts[0].pos;
+    float3 b = tri.verts[1].pos;
+    float3 c = tri.verts[2].pos;
     
-    // int3 xyz = pos < 1 ? pos : pos-1;
-    // xy.x = pos.x < 0 ? pos.x - 1.0f : pos.x;
-    // xy.y = pos.z < 0 ? pos.z - 1.0f : pos.z;
+    float3 ba = b - a;
+    float3 ca = c - a;
+    float3 normal = normalize(cross(ba, ca));
+    normal = mul(normal, ((float3x3) ObjectToWorld4x3()));
+    float3 color = abs(normal);
+    payload.color = float16_t3(color.x, color.y, color.z);
+    return;
+
+
+
+
+
+    // //const float  = 10;
     
-    // bool colorIdx = 1;//((xy.x + xy.y) % 2) ? true : false;
+    // float3 pos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
+
+    // int3 xyz = (int3)select(pos < 1, pos -1, pos);
+    // bool3 evenSquare = xyz%2;
+    
+    // bool colorIdx = evenSquare.x ^ evenSquare.y ^ evenSquare.z;// ((xyz.x + xyz.y)%2);
+    // // colorIdx = colorIdx | (xyz.z%2);
+    
+    // // int3 xyz = pos < 1 ? pos : pos-1;
+    // // xy.x = pos.x < 0 ? pos.x - 1.0f : pos.x;
+    // // xy.y = pos.z < 0 ? pos.z - 1.0f : pos.z;
+    
+    // // bool colorIdx = 1;//((xy.x + xy.y) % 2) ? true : false;
 
 
     
 
-    float16_t3 color = colorIdx ? float16_t3(0.9, 0.9, 0.9) : float16_t3(0.4, 0.4, 0.4);
+    // float16_t3 color = colorIdx ? float16_t3(0.9, 0.9, 0.9) : float16_t3(0.4, 0.4, 0.4);
 
-    payload.color = color;
+    // payload.color = color;
     return;
 }
  

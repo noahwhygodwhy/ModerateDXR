@@ -1,7 +1,9 @@
 #pragma once
 #include "common.h"
 #include <filesystem>
+#if _DEBUG
 #include <pix3.h>
+
 
 static std::wstring GetLatestWinPixGpuCapturerPath_Cpp17()
 {
@@ -31,3 +33,4 @@ static std::wstring GetLatestWinPixGpuCapturerPath_Cpp17()
 
     return pixInstallationPath / newestVersionFound / L"WinPixGpuCapturer.dll";
 }
+#endif //_DEBUG
