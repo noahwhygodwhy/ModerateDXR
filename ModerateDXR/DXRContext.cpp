@@ -45,44 +45,26 @@ void DxrContext::CreateScreenSizedResources()
     device->CreateUnorderedAccessView(framebuffer.Get(), nullptr, &vd, descHeap->GetCPUDescriptorHandleForHeapStart());
 }
 
-void DxrContext::DoResize(float ct)
-{
-    if(!this->backbuffer) {return;}
-    Flush();
-    OutputDebugStringF("do resize\n %u, %u\n", this->newWidth, this->newHeight);
-    this->screenHeight = newHeight;
-    this->screenWidth = newWidth;
-    this->backbuffer.Reset();
-    swapChain->ResizeBuffers(2, this->screenWidth, this->screenHeight, DXGI_FORMAT_R16G16B16A16_FLOAT, 0);
-    this->CreateScreenSizedResources();
-    this->needResize = false;
-    
-}
-void DxrContext::SetResize(uint width, uint height)
-{
-    OutputDebugStringF("set resize\n %u, %u\n", width, height);
-    this->newWidth = width;
-    this->newHeight = height;
-    this->needResize = true;
-}
 
 void DxrContext::BuildRootSignature()
 {
     ComPtr<ID3DBlob> blob;
 
+    //CD3DX12_DESCRIPTOR_RANGE1 descRanges[2];
 
-    CD3DX12_DESCRIPTOR_RANGE1 descRanges[2];
-    descRanges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0); //u0 framebuffer
-    descRanges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE); //t1 | geombuffer[]
+    CD3DX12_DESCRIPTOR_RANGE1 framebufferDescRange;
+    framebufferDescRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0); //u0 framebuffer
+    CD3DX12_DESCRIPTOR_RANGE1 geombufferDescRange;
+    geombufferDescRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE); //t1 | geombuffer[]
 
+    //descRanges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0); //u0 framebuffer
+    //descRanges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE); //t1 | geombuffer[]
 
-    CD3DX12_ROOT_PARAMETER1 rootParams[3];
-    rootParams[0].InitAsConstantBufferView(0, 0);  // b0 | constant buffer
-    rootParams[1].InitAsShaderResourceView(0, 0);  // t0 | tlas
-    rootParams[2].InitAsDescriptorTable(_countof(descRanges), descRanges); //
-
-    //OutputDebugStringF("\n\nflags: %u\n\n\n", rootParams[3].DescriptorTable.pDescriptorRanges[0].Flags);
-
+    CD3DX12_ROOT_PARAMETER1 rootParams[4];
+    rootParams[0].InitAsConstantBufferView(0, 0);                  // b0 | constant buffer
+    rootParams[1].InitAsShaderResourceView(0, 0);                  // t0 | tlas
+    rootParams[2].InitAsDescriptorTable(1, &framebufferDescRange); // u0 | framebuffer
+    rootParams[3].InitAsDescriptorTable(1, &geombufferDescRange);  // t1 | geombuffer[]
     
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC RootSigDesc(_countof(rootParams), rootParams);
 
@@ -93,12 +75,11 @@ void DxrContext::BuildRootSignature()
 
 const static HitGroupData hgdata[] =
 {
-    HitGroupData(L"normalcolors"),
-    HitGroupData(L"red"),
-    HitGroupData(L"checkerboard"),
-    HitGroupData(L"mirror"),
-    HitGroupData(L"skybox"),
+    HitGroupData(L"hitgroup_a"),
+    HitGroupData(L"hitgroup_b"),
+    HitGroupData(L"hitgroup_c"),
 };
+
 void DxrContext::BuildPipelineStateObject()
 {
     D3D12_DXIL_LIBRARY_DESC libraryDesc = { .DXILLibrary = {.pShaderBytecode = compiledShader,.BytecodeLength = std::size(compiledShader)} };
@@ -110,24 +91,22 @@ void DxrContext::BuildPipelineStateObject()
     D3D12_GLOBAL_ROOT_SIGNATURE rootsigDesc = { .pGlobalRootSignature = rootSignature.Get() };
     D3D12_STATE_SUBOBJECT rootsigSO = { .Type = D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, .pDesc = &rootsigDesc };
 
-    D3D12_RAYTRACING_PIPELINE_CONFIG pipelinecfgDesc = { .MaxTraceRecursionDepth = 30 };
+    D3D12_RAYTRACING_PIPELINE_CONFIG pipelinecfgDesc = { .MaxTraceRecursionDepth = 1 };
     D3D12_STATE_SUBOBJECT pipelinecfgSO = { .Type = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG, .pDesc = &pipelinecfgDesc };
 
     vector<D3D12_STATE_SUBOBJECT> subobjects = { librarySO, shadercfgSO, rootsigSO, pipelinecfgSO };
+    
+    //for each hitgroup, make a subobject
     for (uint i = 0; i < _countof(hgdata); i++)
     {
         subobjects.push_back(hgdata[i].so);
     }
-    //D3D12_HIT_GROUP_DESC hitgroupDesc = { .HitGroupExport = L"hg_normalcolor", .Type = D3D12_HIT_GROUP_TYPE_TRIANGLES, .ClosestHitShaderImport = L"ch_normalcolors" };
-    //D3D12_STATE_SUBOBJECT hitgroupSO = { .Type = D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP, .pDesc = &hitgroupDesc };
 
     D3D12_STATE_OBJECT_DESC stateObjectDesc{ .Type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE, .NumSubobjects = (uint) subobjects.size(), .pSubobjects = subobjects.data()};
-
     TIF(device->CreateStateObject(&stateObjectDesc, IID_PPV_ARGS(&pso)));
 
 
     constexpr uint32_t numShaders = 2+_countof(hgdata);
-
     CD3DX12_HEAP_PROPERTIES shaderBuffProps(D3D12_HEAP_TYPE_UPLOAD);
     CD3DX12_RESOURCE_DESC shaderBuffDesc = CD3DX12_RESOURCE_DESC::Buffer(numShaders * D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT);
     TIF(device->CreateCommittedResource(&shaderBuffProps, D3D12_HEAP_FLAG_NONE, &shaderBuffDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&shaderBuffer)));
@@ -159,8 +138,6 @@ DxrContext::DxrContext(HWND hwnd, uint initWidth, uint initHeight)
 {
     this->screenWidth = initWidth;
     this->screenHeight = initHeight;
-    this->newWidth = newWidth;
-    this->newHeight = initHeight;
     ComPtr<IDXGIFactory4> factory4;
     TIF(CreateDXGIFactory2(0, IID_PPV_ARGS(&factory4)));
     TIF(factory4->QueryInterface(IID_PPV_ARGS(&factory)));
@@ -197,6 +174,7 @@ DxrContext::DxrContext(HWND hwnd, uint initWidth, uint initHeight)
         .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
     };
     TIF(device->CreateDescriptorHeap(&descHeapDesc, IID_PPV_ARGS(&descHeap)));
+    this->sizeInDescHeap = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     this->BuildRootSignature();
     this->BuildPipelineStateObject();
     this->CreateScreenSizedResources();
@@ -204,9 +182,7 @@ DxrContext::DxrContext(HWND hwnd, uint initWidth, uint initHeight)
     TIF(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&commandAllocator)));
     TIF(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, commandAllocator.Get(), nullptr, IID_PPV_ARGS(&commandList)));
     TIF(commandList->Close());
-
     TIF(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence)));
-
 
     CD3DX12_HEAP_PROPERTIES cbProps(D3D12_HEAP_TYPE_UPLOAD);
     CD3DX12_RESOURCE_DESC cbDesc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(ConstantBufferStruct));
@@ -230,8 +206,6 @@ DxrContext::~DxrContext()
 
 void DxrContext::UploadInstanceDescs(vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs)
 {
-    //TODO: check the list hasn't changed in size?
-
     void* uploadPointer;
     instanceBuffer->Map(0, nullptr, &uploadPointer);
     memcpy(uploadPointer, instanceDescs.data(), instanceDescs.size() * sizeof(D3D12_RAYTRACING_INSTANCE_DESC));
@@ -240,7 +214,7 @@ void DxrContext::UploadInstanceDescs(vector<D3D12_RAYTRACING_INSTANCE_DESC> inst
 
 void DxrContext::CreateTlasResources(vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs)
 {
-;
+
     CD3DX12_HEAP_PROPERTIES instanceProps(D3D12_HEAP_TYPE_UPLOAD);
     CD3DX12_RESOURCE_DESC instanceDesc = CD3DX12_RESOURCE_DESC::Buffer(instanceDescs.size() * sizeof(D3D12_RAYTRACING_INSTANCE_DESC));
     TIF(device->CreateCommittedResource(&instanceProps, D3D12_HEAP_FLAG_NONE, &instanceDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&instanceBuffer)));
@@ -256,12 +230,6 @@ void DxrContext::CreateTlasResources(vector<D3D12_RAYTRACING_INSTANCE_DESC> inst
 
     D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuildInfo;
     device->GetRaytracingAccelerationStructurePrebuildInfo(&this->tlasInput, &prebuildInfo);
-
-
-
-    //TODO: only recreate if the size changed / got significantly smaller
-    //SAFE_RELEASE(this->tlas);
-    //SAFE_RELEASE(this->tlasScratch);    
 
     CD3DX12_HEAP_PROPERTIES tlasProps(D3D12_HEAP_TYPE_DEFAULT);
     CD3DX12_RESOURCE_DESC tlasScratchDesc = CD3DX12_RESOURCE_DESC::Buffer(prebuildInfo.ScratchDataSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
@@ -282,9 +250,7 @@ void DxrContext::BuildTlas()
         .ScratchAccelerationStructureData = this->tlasScratch->GetGPUVirtualAddress()
     };
     commandList->BuildRaytracingAccelerationStructure(&buildDesc, 0, nullptr);
-    //exit(-1);
     D3D12_RESOURCE_BARRIER tlasBarrier = D3D12_RESOURCE_BARRIER{ .Type = D3D12_RESOURCE_BARRIER_TYPE_UAV, .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE, .UAV = {.pResource = this->tlas.Get()} };
-
     commandList->ResourceBarrier(1, &tlasBarrier);
 }
 
@@ -305,24 +271,37 @@ void DxrContext::DispatchRays()
 {
     commandList->SetPipelineState1(pso.Get());
     commandList->SetComputeRootSignature(rootSignature.Get());
-    //ID3D12DescriptorHeap* hp = descHeap.Get();
+
     commandList->SetDescriptorHeaps(1, descHeap.GetAddressOf());
     D3D12_GPU_DESCRIPTOR_HANDLE descHandle = descHeap->GetGPUDescriptorHandleForHeapStart();
-    commandList->SetComputeRootConstantBufferView(0, constantBuffer->GetGPUVirtualAddress());//TODO: need a constant buffer
+    D3D12_GPU_DESCRIPTOR_HANDLE framebufferHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(descHandle, 0, sizeInDescHeap);
+    D3D12_GPU_DESCRIPTOR_HANDLE geomBufferHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(descHandle, 1, sizeInDescHeap);
+
+    commandList->SetComputeRootConstantBufferView(0, constantBuffer->GetGPUVirtualAddress());
     commandList->SetComputeRootShaderResourceView(1, tlas->GetGPUVirtualAddress());
-    commandList->SetComputeRootDescriptorTable(2, descHandle);
+    commandList->SetComputeRootDescriptorTable(2, framebufferHandle);
+    commandList->SetComputeRootDescriptorTable(3, geomBufferHandle);
 
     //TODO: need a shader library resource
     D3D12_DISPATCH_RAYS_DESC rayDesc = {
-        .RayGenerationShaderRecord = {.StartAddress = shaderBuffer->GetGPUVirtualAddress(), .SizeInBytes = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES},
-        .MissShaderTable = {.StartAddress = shaderBuffer->GetGPUVirtualAddress() + D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT,.SizeInBytes = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES},
-        .HitGroupTable = {.StartAddress = shaderBuffer->GetGPUVirtualAddress() + 2 * D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT,.SizeInBytes = (D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES * _countof(hgdata)), .StrideInBytes = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES},
+        .RayGenerationShaderRecord = {
+            .StartAddress = shaderBuffer->GetGPUVirtualAddress(), 
+            .SizeInBytes = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES
+        },
+        .MissShaderTable = {
+            .StartAddress = shaderBuffer->GetGPUVirtualAddress() + D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT,
+            .SizeInBytes = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES
+        },
+        .HitGroupTable = {
+            .StartAddress = shaderBuffer->GetGPUVirtualAddress() + (2 * D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT),
+            .SizeInBytes = (D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES * _countof(hgdata)),
+            .StrideInBytes = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES
+        },
         .Width = this->screenWidth,
         .Height = this->screenHeight,
         .Depth = 1
     };
     commandList->DispatchRays(&rayDesc);
-    
 }
 
 void DxrContext::CopyFramebuffer()
@@ -356,46 +335,12 @@ void DxrContext::Flush()
 
 void DxrContext::Render(float ct)
 {
-    //OutputDebugStringF("on render\n");
     this->ResetCommandList();
     this->BuildTlas();
     this->DispatchRays();
     this->CopyFramebuffer();
-
-    this->swapChainEvent = this->swapChain->GetFrameLatencyWaitableObject();
-
     this->ExecuteCommandList();
     this->Flush();
     this->Present();
-
     this->Flush();
-    //WaitForSingleObjectEx(swapChainEvent, INFINITE, FALSE);
-    if(this->needResize) { this->DoResize(ct); }
-    this->Flush();
-}
-
-void DxrContext::alterInstanceTransform(uint index, mat4x4 tx)
-{
-    mat3x4 oldTransform;
-    for (uint i = 0; i < 3; i++)
-    {
-        for (uint j = 0; j < 4; j++)
-        {
-            oldTransform[i][j] = instanceDescs[index].Transform[i][j];
-        }
-    }
-    mat4x4 full = transpose(oldTransform);
-    full[3][3] = 1.0f;
-    full = full * tx; //todo order of this?
-
-    float q = full[3][3];
-    mat3x4 newTransform = transpose(full) / q;
-
-    for (uint i = 0; i < 3; i++)
-    {
-        for (uint j = 0; j < 4; j++)
-        {
-            instanceDescs[index].Transform[i][j] = newTransform[i][j];
-        }
-    }
 }
