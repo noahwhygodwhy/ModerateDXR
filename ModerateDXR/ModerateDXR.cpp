@@ -97,21 +97,25 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
     for (Raytracable* r : models) blasBarriers.push_back(r->BuildBLAS(ctx->device, ctx->commandList));
 
-    Instance iCapy(capy, transpose(scale(translate(rotate(mat4x4(1), radians(45.0f), fvec3(0, 1, 0)), fvec3(-1, -3, 0)), fvec3(0.5, 0.5, 0.5))), 2);
+    Instance iCapy(
+        capy, 
+        transpose(scale(translate(rotate(mat4x4(1), radians(45.0f), fvec3(0, 1, 0)), fvec3(-1, -3, 0)), fvec3(0.5, 0.5, 0.5))), 
+        0, //hit group
+        2);//instance id
     instances.push_back(&iCapy);
-    Instance iCapy2(capy, transpose(scale(translate(rotate(mat4x4(1), radians(45.0f), fvec3(0, 1, 0)), fvec3(1, -3, 0)), fvec3(0.5, 0.5, 0.5))), 0);
+    Instance iCapy2(
+        capy, 
+        transpose(scale(translate(rotate(mat4x4(1), radians(45.0f), fvec3(0, 1, 0)), fvec3(1, -3, 0)), fvec3(0.5, 0.5, 0.5))),
+        0, //hit group
+        2);//instance id
     instances.push_back(&iCapy2);
  /*   Instance iB(cube, glm::transpose(glm::translate(scale(mat4x4(1), fvec3(5)), fvec3(0, 0, -10))), 2);
     instances.push_back(&iB);*/
     Instance instanceCube(
         cube,
-        glm::transpose(
-            glm::scale(
-                glm::translate(mat4x4(1.0f), fvec3(0, -4.5, 0)),
-                fvec3(100, 1, 100)
-            )
-        ),
-    2);
+        glm::transpose(glm::scale(glm::translate(mat4x4(1.0f), fvec3(0, -4.5, 0)), fvec3(100, 1, 100))),
+        0, //hit group
+        0);//instance id
     instances.push_back(&instanceCube);
 
     for (Instance* i : instances) ctx->instanceDescs.push_back(i->GetInstanceDesc());

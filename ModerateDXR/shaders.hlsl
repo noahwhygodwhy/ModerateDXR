@@ -9,8 +9,6 @@ RWTexture2D<float16_t4>               colorOut   : register(u0);
 RaytracingAccelerationStructure       scene      : register(t0);
 StructuredBuffer<Tringle>             geomdata[] : register(t1);
 
-
-//TODO: redo this, i don't like it
 [shader("raygeneration")]
 void RayGeneration()
 {
@@ -32,8 +30,6 @@ void RayGeneration()
     
     float3 centerOfPlane = pos + (forward * distanceToPlane);
     
-    
-    //float2 offsetFromCenter = float2(dims.x, dims.y) - halfDims;
     float2 offsetFromCenter = float2(pixelID) - halfDims;
     
     
@@ -81,9 +77,44 @@ float3 distanceColor()
 }
 
 
+
+
+void unifiedShading(inout RayPayload payload)
+{
+    Tringle tri = geomdata[InstanceID()][PrimitiveIndex()];
+    //float3 pos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
+    
+    float3 a = tri.verts[0].pos;
+    float3 b = tri.verts[1].pos;
+    float3 c = tri.verts[2].pos;
+    
+    float3 ba = b - a;
+    float3 ca = c - a;
+    float3 normal = normalize(cross(ba, ca));
+    normal = mul(normal, ((float3x3) ObjectToWorld4x3()));
+    float3 color = abs(normal);
+    payload.color = float16_t3(color.x, color.y, color.z);
+    return;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 [shader("closesthit")]
 void ch_normalcolors(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes attrib)
 {
+    unifiedShading(payload);
+    return;
 
     Tringle tri = geomdata[InstanceID()][PrimitiveIndex()];
     //float3 pos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
@@ -101,9 +132,12 @@ void ch_normalcolors(inout RayPayload payload, in BuiltInTriangleIntersectionAtt
     return;
 }
 
+
 [shader("closesthit")]
 void ch_red(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes attrib)
 {
+    unifiedShading(payload);
+    return;
     (void) attrib;
     //payload.color = float16_t3(0.0, 0.0, 1.0);
     //return;
@@ -113,9 +147,22 @@ void ch_red(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes a
     //float3 pos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
 }
 
+
+
+
+
+
+
+
+
+
+
 [shader("closesthit")]
 void ch_checkerboard(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes attrib)
 {
+    unifiedShading(payload);
+    return;
+    
     
     // payload.color = distanceColor();
     // payload.color[InstanceID()] = 1.0;
@@ -165,9 +212,12 @@ void ch_checkerboard(inout RayPayload payload, in BuiltInTriangleIntersectionAtt
 }
  
 
+
 [shader("closesthit")]
 void ch_mirror(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes attrib)
 {
+    unifiedShading(payload);
+    return;
     (void) attrib;
     
     float3 pos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
@@ -186,9 +236,12 @@ void ch_mirror(inout RayPayload payload, in BuiltInTriangleIntersectionAttribute
     return;
 }
 
+
 [shader("closesthit")]
 void ch_skybox(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes attrib)
 {
+    unifiedShading(payload);
+    return;
     (void)attrib;
     payload.color = float16_t3(0.211765, 0.780392, 0.94902);
 }

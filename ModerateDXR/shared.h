@@ -35,7 +35,7 @@ struct Vert
 {
     float3 pos;
 };
-struct Tringlex
+struct Tringle
 {
     Vert verts[3];
 };

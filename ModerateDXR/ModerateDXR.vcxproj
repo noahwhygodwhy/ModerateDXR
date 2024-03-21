@@ -114,7 +114,7 @@
       <AdditionalDependencies>WinPixEventRuntime.lib;dxcompiler.lib;d3d12.lib;dxgi.lib;d3dcompiler.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PreBuildEvent>
-      <Command>dxc -HV 2021 -enable-16bit-types -T lib_6_3 -Wall -Wextra -Zi -Qembed_debug shaders.hlsl -Fh shader.h /Vn compiledShader</Command>
+      <Command>dxc -HV 2021 -enable-16bit-types -T lib_6_6 -Wall -Wextra -Zi -Qembed_debug shaders.hlsl -Fh shader.h /Vn compiledShader</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -135,7 +135,7 @@
       <AdditionalDependencies>WinPixEventRuntime.lib;dxcompiler.lib;d3d12.lib;dxgi.lib;d3dcompiler.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PreBuildEvent>
-      <Command>dxc -HV 2021 -enable-16bit-types -T lib_6_3 -Wall -Wextra -Zi shaders.hlsl -Fh shader.h /Vn compiledShader</Command>
+      <Command>dxc -HV 2021 -enable-16bit-types -T lib_6_6 -Wall -Wextra -Zi shaders.hlsl -Fh shader.h /Vn compiledShader</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>

@@ -5,7 +5,7 @@
 class Instance
 {
 public:
-	Instance(const Raytracable& object, fmat3x4 transform, uint hgIndex = 0);
+	Instance(const Raytracable& object, fmat3x4 transform, uint hgIndex, uint instanceID);
 	~Instance();
 	D3D12_RAYTRACING_INSTANCE_DESC GetInstanceDesc();
 	fmat4x4 transform;

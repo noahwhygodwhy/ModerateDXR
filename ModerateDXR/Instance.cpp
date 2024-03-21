@@ -1,6 +1,6 @@
 #include "Instance.hpp"
 
-Instance::Instance(const Raytracable& object, fmat3x4 transform, uint hgIndex)
+Instance::Instance(const Raytracable& object, fmat3x4 transform, uint hgIndex, uint instanceID)
 {
 	this->transform = mat4x4(transform);
 
@@ -11,7 +11,7 @@ Instance::Instance(const Raytracable& object, fmat3x4 transform, uint hgIndex)
 			this->instanceDesc.Transform[x][y] = transform[x][y];
 		}
 	}
-	this->instanceDesc.InstanceID = object.heapDescIndex-1;
+	this->instanceDesc.InstanceID = instanceID;
 	this->instanceDesc.InstanceMask = 0x1;
 	this->instanceDesc.InstanceContributionToHitGroupIndex = hgIndex;
 	this->instanceDesc.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
