@@ -5,7 +5,13 @@ This is the branch for a reproducing case for a bug I'm trying to figure out.
 For some reason, within a hitgroup, instanceID seems to be shader wave wide, leading to geometry data accessed via instance ID to not be correct. If I change the instance desc's hitgroups to be different, it works just fine, but when they're in the same hitgroup, it breaks.
 
 This is colored by the normals calculated from vertices accessed by geometryData\[InstanceID()\]\[PrimitiveIndex()\]
+This is the result from a 7900xtx on most recent webpost 24.3.1
+(don't mind that it's dimmer, this was on an hdr monitor, and the 2nd image wasn't)
 ![image](https://github.com/noahwhygodwhy/ModerateDXR/assets/9063267/9f300b8a-bcc3-43db-bc54-93982f9fef81)
+
+This is the same one, but on a 3080ti:
+![image](https://github.com/noahwhygodwhy/ModerateDXR/assets/9063267/3cb60969-b882-47cd-86b1-de70455cde70)
+
 
 ## Getting Started
 
