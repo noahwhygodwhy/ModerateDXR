@@ -170,28 +170,22 @@ DxrContext::DxrContext(HWND hwnd, uint initWidth, uint initHeight)
     this->sizeInDescHeap = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     this->BuildRootSignature();
     this->BuildPipelineStateObject();
-    this->CreateScreenSizedResources();
 
-    TIF(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&commandAllocator)));
-    TIF(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, commandAllocator.Get(), nullptr, IID_PPV_ARGS(&commandList)));
-    TIF(commandList->Close());
-    TIF(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence)));
+    this->CreateScreenSizedResources();
 
     CD3DX12_HEAP_PROPERTIES cbProps(D3D12_HEAP_TYPE_UPLOAD);
     CD3DX12_RESOURCE_DESC cbDesc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(ConstantBufferStruct));
     TIF(device->CreateCommittedResource(&cbProps, D3D12_HEAP_FLAG_NONE, &cbDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&constantBuffer)));
     constantBuffer->SetName(L"constantBuffer");
     constantBuffer->Map(0, nullptr, (void**)&this->constants);
-}
 
-
-void* DxrContext::MapConstantBuffer()
-{
-    void* cb;
-    constantBuffer->Map(0, nullptr, (void**)&cb);
-    return cb;
+    TIF(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&commandAllocator)));
+    TIF(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, commandAllocator.Get(), nullptr, IID_PPV_ARGS(&commandList)));
+    TIF(commandList->Close());
+    TIF(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence)));
 
 }
+
 
 DxrContext::~DxrContext()
 {

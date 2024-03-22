@@ -8,31 +8,6 @@
 #include "Instance.hpp"
 
 #include <functional>
-//#include "../imgui/imgui.h"
-//#include "../imgui/backends/imgui_impl_win32.h"
-//#include "../imgui/backends/imgui_impl_dx12.h"
-
-
-
-//void startImgui(HWND hwnd, DxrContext ctx)
-//{
-//    IMGUI_CHECKVERSION();
-//    ImGui::CreateContext();
-//    ImGuiIO& io = ImGui::GetIO();
-//    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-//    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-//    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // IF using Docking Branch
-//
-//    // Setup Platform/Renderer backends
-//    ImGui_ImplWin32_Init(YOUR_HWND);
-//
-//    ImGui_ImplDX12_Init(YOUR_D3D_DEVICE, NUM_FRAME_IN_FLIGHT, YOUR_RENDER_TARGET_DXGI_FORMAT,
-//        YOUR_SRV_DESC_HEAP,
-//        // You'll need to designate a descriptor from your descriptor heap for Dear ImGui to use internally for its font texture's SRV
-//        YOUR_CPU_DESCRIPTOR_HANDLE_FOR_FONT_SRV,
-//        YOUR_GPU_DESCRIPTOR_HANDLE_FOR_FONT_SRV);
-//}
-
 
 struct WindowUserData
 {
@@ -44,7 +19,6 @@ struct WindowUserData
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
-//static DxrContext* ctx;
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow)
 {
 
@@ -85,8 +59,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 #define ch_hitgroup_a 0
 #define ch_hitgroup_b 1
 #define ch_hitgroup_c 2
-
-
 
     Mesh cube = Mesh("cube.obj");
     models.push_back(&cube);

@@ -8,7 +8,6 @@ public:
 
 	DxrContext(HWND hwnd, uint initWidth, uint initHeight);
 	~DxrContext();
-	void* MapConstantBuffer();
 	void CreateScreenSizedResources();
 	void BuildTlas();
 	void DispatchRays();
