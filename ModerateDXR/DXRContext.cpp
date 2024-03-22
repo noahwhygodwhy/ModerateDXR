@@ -94,10 +94,10 @@ void DxrContext::BuildRootSignature()
 const static HitGroupData hgdata[] =
 {
     HitGroupData(L"normalcolors"),
-    HitGroupData(L"red"),
-    HitGroupData(L"checkerboard"),
-    HitGroupData(L"mirror"),
-    HitGroupData(L"skybox"),
+    // HitGroupData(L"red"),
+    // HitGroupData(L"checkerboard"),
+    // HitGroupData(L"mirror"),
+    // HitGroupData(L"skybox"),
 };
 void DxrContext::BuildPipelineStateObject()
 {
