@@ -126,7 +126,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
     ctx->constants->camPos = float3(0, 1, 5);
     ctx->constants->fov = glm::radians(90.0f);
-    ctx->constants->lookAt = float3(0, 0.5, 0);
+    ctx->constants->lookAt = float3(0, 0.0, 0);
     ctx->constants->ct = 0.0f;
     //ctx->constants->numSamples = 64;
 
@@ -151,7 +151,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         float dt = float(dTDurr.count());
 
 
-        //ctx->constants->camPos = float3(sin(ct) * 5, 1, cos(ct) * 5);
+        ctx->constants->camPos = float3(sin(ct) * 5, 1, cos(ct) * 5);
         ctx->UploadInstanceDescs(ctx->instanceDescs);
 
         //ctx->alterInstanceTransform(0, glm::rotate(mat4(1), radians(90.0f) * dt, fvec3(0, 1, 0)));;

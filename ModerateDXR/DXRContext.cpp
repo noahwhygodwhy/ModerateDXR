@@ -110,7 +110,7 @@ void DxrContext::BuildPipelineStateObject()
     D3D12_GLOBAL_ROOT_SIGNATURE rootsigDesc = { .pGlobalRootSignature = rootSignature.Get() };
     D3D12_STATE_SUBOBJECT rootsigSO = { .Type = D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, .pDesc = &rootsigDesc };
 
-    D3D12_RAYTRACING_PIPELINE_CONFIG pipelinecfgDesc = { .MaxTraceRecursionDepth = 30 };
+    D3D12_RAYTRACING_PIPELINE_CONFIG pipelinecfgDesc = { .MaxTraceRecursionDepth = MAX_RECURSION_LAYERS };
     D3D12_STATE_SUBOBJECT pipelinecfgSO = { .Type = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG, .pDesc = &pipelinecfgDesc };
 
     vector<D3D12_STATE_SUBOBJECT> subobjects = { librarySO, shadercfgSO, rootsigSO, pipelinecfgSO };

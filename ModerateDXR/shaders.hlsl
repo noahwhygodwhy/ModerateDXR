@@ -3,7 +3,7 @@
 // https://landelare.github.io/2023/02/18/dxr-tutorial.html#shader.hlsl
 
 #include "shared.h"
-//#include "CookTorrance.hlsl"
+#include "CookTorrance.hlsl"
 
 ConstantBuffer<ConstantBufferStruct>  constants  : register(b0);
 RWTexture2D<float16_t4>               colorOut   : register(u0);
@@ -22,8 +22,8 @@ void RayGeneration()
      
     
     
-    uint2 pixelID = DispatchRaysIndex().xy;
-    uint2 dims = DispatchRaysDimensions().xy ;
+    uint2 pixelID = NonUniformResourceIndex(DispatchRaysIndex()).xy;
+    uint2 dims = NonUniformResourceIndex(DispatchRaysDimensions()).xy;
     float2 halfDims = dims / 2.0f;
     float halfFOV = constants.fov / 2.0f;
         
@@ -43,22 +43,17 @@ void RayGeneration()
     ray.TMax = 1000;
 
     RayPayload payload = (RayPayload)0;
-    //payload.masked = float16_t3(1.0, 1.0, 1.0);
-    //payload.layer = 0; //why doesn't the api provide a layer ugh
+    payload.mask = float16_t3(1.0, 1.0, 1.0);
+    payload.layer = 0; //why doesn't the api provide a layer ugh
     payload.accum = float16_t3(0.0, 0.0, 0.0);
-    //payload.seed = 0;//asuint(float(((pixelID.y * dims.x) + pixelID.x) * 10000) * frac(constants.ct));
+    payload.seed = asuint(float(((pixelID.y * dims.x) + pixelID.x) * 10000) * frac(constants.ct));
 
     TraceRay(scene, RAY_FLAG_FORCE_OPAQUE, 0xFF, 0, 0, 0, ray, payload);
+    
+    //payload.accum.b = float(payload.layer) / float(MAX_RECURSION_LAYERS);
+    
     //colorOut[pixelID] = float16_t4(0.0, 1.0, 0.0, 1.0);
     colorOut[pixelID] = float16_t4(payload.accum.x, payload.accum.y, payload.accum.z, 1.0);
-}
-
-[shader("miss")]
-void Miss(inout RayPayload payload)
-{
-    payload.accum = float16_t3(0, 0, 0);
-    return;
-    //payload.color = float16_t3(0.0, 0.0, 0.0);
 }
 
 float3 doTransform(float3 vec3, float4x3 mat4x3)
@@ -79,12 +74,9 @@ float3 doTransform(float3 vec3, float4x3 mat4x3)
 }
 
 
-
 float3 getWorldSpaceNormal()
 {
-    uint instanceID = InstanceID();
-    uint primdex = PrimitiveIndex();
-    Tringle tri = geomdata[instanceID][primdex];
+    Tringle tri = geomdata[NonUniformResourceIndex(InstanceID())][NonUniformResourceIndex(PrimitiveIndex())];
     //float3 pos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
     
     float3 a = tri.verts[0].pos;
@@ -98,6 +90,80 @@ float3 getWorldSpaceNormal()
     return normal;
 }
 
+void ShadeItSky(
+inout RayPayload payload,
+in float3 normal,
+in float3 oldRayDir,
+in float3 newRayDir,
+uint matIndex
+)
+{
+
+    // TODO: mat from mat buffer (until we start doing textures but f that, samplers who?)
+    Material mat = (Material)0;
+    mat.color = float3(1.0, 1.0, 1.0);
+    mat.ni = 1.0;
+    mat.emission = float3(1.0, 1.0, 1.0);
+    mat.ns = 1.0;
+    mat.trans = 0.0;
+    mat.metal = 0.0;
+    mat.smooth = 0.0;
+    mat.indicator = 0;
+
+    float tf = abs((1.0 - mat.ni) / (1.0 + mat.ni));
+    float3 F0a = abs((1.0 - mat.ni) / (1.0 + mat.ni)).xxx;
+
+    //float3(tf, tf, tf);
+    F0a = F0a * F0a;
+
+    float3 F0 = lerp(F0a, mat.color, mat.metal);
+    //dvec3 ctSpecular = CookTorance(ray, reflectionRay, minRayResult, downstreamRadiance, minRayResult.shape->mat, currentIOR, F0, kS);
+    //TODO: need to keep the current ray
+    float3 kS = float3(0, 0, 0);
+    float3 cT = max(CookTorance(oldRayDir, newRayDir, normal, mat.ni, F0, kS), 0.0f);
+    //blinn phong (ish)
+    float3 R = reflect(newRayDir, normal); //   rotateVector(newRay.dir, PI, hr.normal); //TODO: not the right rotate
+
+    float3 V = -oldRayDir;
+    float3 N = normal;
+    float3 L = newRayDir;   
+
+    float3 H = normalize((L + V));
+
+    float diff = max(dot(L, N), 0.0f);
+    float spec = max(dot(N, H), 0.0f);
+    //float lightsum = diff + spec;
+    float3 kD = ((1.0f - kS) * (1.0f - mat.metal)); //*diff;
+
+    payload.accum += mat.emission * payload.mask;
+    payload.mask *= mat.color * ((diff * kD) + (cT));
+}
+
+[shader("miss")]
+void Miss(inout RayPayload payload)
+{
+    if(payload.layer == 0) { payload.accum = float3(1, 0, 0); return; }
+    float3 normal = -WorldRayDirection();
+    float3 oldRayDir = WorldRayDirection();
+    float3 newRayDir = -WorldRayDirection();
+    ShadeItSky(
+        payload,
+        normal,
+        oldRayDir,
+        newRayDir,
+        0
+    );
+    //float3 directionalLightDir = normalize(float3(-1, -1, -1));
+    //payload.accum = float3(1, 0, 0);
+    //payload.mask *= clamp(cross(WorldRayDirection(), -directionalLightDir), float3(0, 0, 0), float3(1, 1, 1));
+
+    // payload.accum = float16_t3(0, 0, 0);
+    return;
+    //payload.color = float16_t3(0.0, 0.0, 0.0);
+}
+
+
+
 float3 distanceColor()
 {
     float i = frac(RayTCurrent());
@@ -109,7 +175,7 @@ float3 distanceColor()
 
 void unifiedShading(inout RayPayload payload)
 {
-    Tringle tri = geomdata[InstanceID()][PrimitiveIndex()];
+    Tringle tri = geomdata[NonUniformResourceIndex(InstanceID())][NonUniformResourceIndex(PrimitiveIndex())];
     //float3 pos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
     
     float3 a = tri.verts[0].pos;
@@ -121,7 +187,7 @@ void unifiedShading(inout RayPayload payload)
     float3 normal = normalize(cross(ba, ca));
     normal = mul(normal, ((float3x3) ObjectToWorld4x3()));
     float3 color = abs(normal);
-    payload.color = float16_t3(color.x, color.y, color.z);
+    payload.accum = float16_t3(color.x, color.y, color.z);
     return;
 }
 
@@ -129,50 +195,6 @@ void unifiedShading(inout RayPayload payload)
 
 
 
-
-
-
-
-
-
-
-
-
-// struct Material
-// {
-// // #ifdef __cplusplus
-// // 	Material(
-// // 		float3 color = float3(1.0f, 1.0f, 1.0f),
-// // 		float3 emission = float3(0.0f, 0.0f, 0.0f),
-// // 		float ni = 1.0f,
-// // 		float ns = 1.0,
-// // 		float trans = 0.0,
-// // 		float metal = 0.0,
-// // 		float smooth = 0.0,
-// // 		uint indicator = 0)
-// // 	{
-// // 		this->color = color;
-// // 		this->emission = emission;
-// // 		this->ni = ni;
-// // 		this->ns = ns;
-// // 		this->trans = trans;
-// // 		this->metal = metal;
-// // 		this->smooth = smooth;
-// // 		this->indicator = indicator;
-// // 	}
-    
-// // #endif // __cplusplus
-
-//     float3 color; //base color
-//     float ni; //index of refracton
-//     float3 emission; //light emissition 
-//     float ns; //specular exponent
-//     float trans; //transparency
-//     float metal; //metalness
-//     float smooth; //smoothness
-//     uint indicator;
-// };
-/*
 void ShadeIt(
 inout RayPayload payload,
 in float3 normal,
@@ -218,10 +240,10 @@ uint matIndex
     //float lightsum = diff + spec;
     float3 kD = ((1.0f - kS) * (1.0f - mat.metal)); //*diff;
 
-    payload.accum += mat.emission * payload.masked;
-    payload.masked *= mat.color * ((diff * kD) + (cT));
+    payload.accum += mat.emission * payload.mask;
+    payload.mask *= mat.color * ((diff * kD) + (cT));
 }
-*/
+
 
 
 
@@ -275,20 +297,20 @@ void ch_normalcolors(inout RayPayload payload, in BuiltInTriangleIntersectionAtt
     (void) attrib;
     
     
-    Tringle tri = geomdata[InstanceID()][PrimitiveIndex()];
-    //float3 pos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
+    // Tringle tri = geomdata[NonUniformResourceIndex(InstanceID())][NonUniformResourceIndex(PrimitiveIndex())];
+    // //float3 pos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
     
-    float3 a = tri.verts[0].pos;
-    float3 b = tri.verts[1].pos;
-    float3 c = tri.verts[2].pos;
+    // float3 a = tri.verts[0].pos;
+    // float3 b = tri.verts[1].pos;
+    // float3 c = tri.verts[2].pos;
     
-    float3 ba = b - a;
-    float3 ca = c - a;
-    float3 normal = normalize(cross(ba, ca));
-    normal = mul(normal, ((float3x3) ObjectToWorld4x3()));
-    float3 color = abs(normal);
-    payload.accum = float16_t3(color.x, color.y, color.z);
-    return;
+    // float3 ba = b - a;
+    // float3 ca = c - a;
+    // float3 normal = normalize(cross(ba, ca));
+    // normal = mul(normal, ((float3x3) ObjectToWorld4x3()));
+    // float3 color = abs(normal);
+    // payload.accum = float16_t3(color.x, color.y, color.z);
+    // return;
 
     
     //float d = frac(RayTCurrent());
@@ -307,62 +329,37 @@ void ch_normalcolors(inout RayPayload payload, in BuiltInTriangleIntersectionAtt
     // mat.metal = 0.0;
     // mat.smooth = 0.0;
     // mat.indicator = 0;
-
-//    float3 pos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
-//    float3 normal = getWorldSpaceNormal();
+    float3 normal = getWorldSpaceNormal();
+    float3 bias = normal * 0.0001f;
+    float3 pos = WorldRayOrigin() + (WorldRayDirection() * RayTCurrent());
     //float3 normal = normalize(cross(ba, ca));
 
     //TODO: a smooth surface will generate more reflected rays
-    //float3 oldRayDir = WorldRayDirection();
-    //float3 newRayDir = generateNewRayDir(oldRayDir, normal, payload.seed);
+    float3 oldRayDir = WorldRayDirection();
+    float3 newRayDir = reflect(oldRayDir, normal); //generateNewRayDir(oldRayDir, normal, payload.seed);
 
+    ShadeIt(
+        payload,
+        normal,
+        oldRayDir,
+        newRayDir,
+        0
+    );
     
-    
-    
+    payload.layer++;
 
-    // Tringle tri = geomdata[InstanceID()][PrimitiveIndex()];
-    // //float3 pos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
+    if (payload.layer >= MAX_RECURSION_LAYERS)
+    {
+        return;
+    }
     
-    // float3 a = tri.verts[0].pos;
-    // float3 b = tri.verts[1].pos;
-    // float3 c = tri.verts[2].pos;
+    RayDesc ray;
+    ray.Origin = pos;
+    ray.Direction = newRayDir;
+    ray.TMin = 0.001;
+    ray.TMax = 1000;
     
-    // float3 ba = b - a;
-    // float3 ca = c - a;
-    // float3 normal = normalize(cross(ba, ca));
-    // normal = mul(normal, ((float3x3) ObjectToWorld4x3()));
-
-    // float3 normal = getWorldSpaceNormal();
-    // float3 color = abs(normal);
-    
-    // payload.accum = float16_t3(color.x, color.y, color.z);
-    // return;
-    // ShadeIt(
-    //     payload,
-    //     normal,
-    //     oldRayDir,
-    //     newRayDir,
-    //     0
-    // );
-
-    // if(payload.layer >= MAX_RECURSION_LAYERS)
-    // {
-    //     return;
-    // }
-    
-    // RayDesc ray;
-    // ray.Origin = pos;
-    // ray.Direction = newRayDir;
-    // ray.TMin = 0.001;
-    // ray.TMax = 1000;
-    // payload.layer++;
-
-    //TraceRay(scene, RAY_FLAG_FORCE_OPAQUE, 0xFF, 0, 0, 0, ray, payload);
-
-    // float3 color = abs(normal);
-    // payload.color = float16_t3(color.x, color.y, color.z);
-    
-    //return;
+    TraceRay(scene, RAY_FLAG_FORCE_OPAQUE, 0xFF, 0, 0, 0, ray, payload);
 };
 
 // [shader("closesthit")]
@@ -373,7 +370,7 @@ void ch_normalcolors(inout RayPayload payload, in BuiltInTriangleIntersectionAtt
 //     //return;
 //     payload.color = float16_t3(1, 0, 0);
 //     return;
-//     //Tringle tri = geomdata[InstanceID()][PrimitiveIndex()];
+//     //Tringle tri = geomdata[NonUniformResourceIndex(InstanceID())][NonUniformResourceIndex(PrimitiveIndex())];
 //     //float3 pos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
 // }
 
