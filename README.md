@@ -9,7 +9,7 @@ This is the result from a 7900xtx on most recent webpost 24.3.1
 ![image](https://github.com/noahwhygodwhy/ModerateDXR/assets/9063267/9f300b8a-bcc3-43db-bc54-93982f9fef81)
 
 This is the same one, but on a 3080ti:
-![image](https://github.com/noahwhygodwhy/ModerateDXR/assets/9063267/3cb60969-b882-47cd-86b1-de70455cde70)
+![image](https://github.com/noahwhygodwhy/ModerateDXR/assets/9063267/b93e7585-e80d-4642-b78e-e9ac8df30eac)
 
 
 ## Getting Started
