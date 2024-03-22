@@ -90,6 +90,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
     Mesh cube = Mesh("cube.obj");
     models.push_back(&cube);
+    Mesh sphere = Mesh("sphere.obj");
+    models.push_back(&sphere);
 
     for (Raytracable* r : models) r->CreateResources(ctx->device);
     for (Raytracable* r : models) r->AddGeomSRV(ctx->device, ctx->descHeap);
@@ -104,10 +106,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     ctx->Flush();
 
     ctx->constants->camPos = float3(5, 5, 5);
-    ctx->constants->fov = glm::radians(90.0f);
+    ctx->constants->fov = glm::radians(30.0f);
     ctx->constants->lookAt = float3(0, 0.5, 0);
     ctx->constants->ct = 0.0f;
-    //ctx->constants->numSamples = 64;
+
 
     Instance instance1(
         cube,
@@ -120,10 +122,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         glm::transpose(glm::translate(glm::rotate(mat4x4(1.0f), radians(45.0f), vec3(1, 1, 1)), fvec3(1.0f, 0.1f, 0.1f))),
         ch_hitgroup_b, //hit group 
         0);//instance id
+    Instance instance3(
+        sphere,
+        glm::transpose(glm::translate(glm::rotate(mat4x4(1.0f), radians(45.0f), vec3(3, 1, 3)), fvec3(1.0f, 0.1f, 0.1f))),
+        ch_hitgroup_b, //hit group 
+        1);//instance id
 
 
     instances.push_back(&instance1);
     instances.push_back(&instance2);
+    instances.push_back(&instance3);
 
     for (Instance* i : instances) ctx->instanceDescs.push_back(i->GetInstanceDesc());
 
@@ -146,11 +154,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
         float ct = float(cTDurr.count());
         float dt = float(dTDurr.count());
-
+        ctx->constants->ct = ct;
         ctx->Render(ct);
-        };
-
-
+    };
 
     WindowUserData wud;
     wud.ctx = ctx;
@@ -176,11 +182,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 static bool firstSize = true;
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-
-    //DxrContext* ctx = (DxrContext*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
     WindowUserData* wud = (WindowUserData*) GetWindowLongPtr(hwnd, GWLP_USERDATA);
-    //TODO: make this userdata a lambda lmao
-
     switch (message)
     {
     case WM_PAINT:
@@ -188,7 +190,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
         break;
     case WM_QUIT:
     case WM_DESTROY:
-        //OutputDebugStringF("exiting?\n");
         exit(0);
         break;
     default:
@@ -196,5 +197,4 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 
     }
     return DefWindowProc(hwnd, message, wParam, lParam);
-    //return 0;
 }

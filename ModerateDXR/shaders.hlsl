@@ -56,6 +56,11 @@ void unifiedShading(inout RayPayload payload)
 {
     uint instance_id = InstanceID();
     uint prim_index = PrimitiveIndex();
+    uint geom_index = GeometryIndex();
+    if(geom_index == 500)
+    {
+        return;
+    }
     Tringle tri = geomdata[instance_id][prim_index];
     
     float3 a = tri.verts[0].pos;

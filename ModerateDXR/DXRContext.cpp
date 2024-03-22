@@ -2,7 +2,6 @@
 #include "shared.h"
 #include "shader.h"
 
-
 void DxrContext::CreateScreenSizedResources()
 {
     D3D12_HEAP_PROPERTIES fbProps{
@@ -50,21 +49,15 @@ void DxrContext::BuildRootSignature()
 {
     ComPtr<ID3DBlob> blob;
 
-    //CD3DX12_DESCRIPTOR_RANGE1 descRanges[2];
+    CD3DX12_DESCRIPTOR_RANGE1 descRanges[2];
 
-    CD3DX12_DESCRIPTOR_RANGE1 framebufferDescRange;
-    framebufferDescRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0); //u0 framebuffer
-    CD3DX12_DESCRIPTOR_RANGE1 geombufferDescRange;
-    geombufferDescRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE); //t1 | geombuffer[]
+    descRanges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0); //u0 framebuffer
+    descRanges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE); //t1 | geombuffer[]
 
-    //descRanges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0); //u0 framebuffer
-    //descRanges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE); //t1 | geombuffer[]
-
-    CD3DX12_ROOT_PARAMETER1 rootParams[4];
+    CD3DX12_ROOT_PARAMETER1 rootParams[3];
     rootParams[0].InitAsConstantBufferView(0, 0);                  // b0 | constant buffer
     rootParams[1].InitAsShaderResourceView(0, 0);                  // t0 | tlas
-    rootParams[2].InitAsDescriptorTable(1, &framebufferDescRange); // u0 | framebuffer
-    rootParams[3].InitAsDescriptorTable(1, &geombufferDescRange);  // t1 | geombuffer[]
+    rootParams[2].InitAsDescriptorTable(2, descRanges); // u0 | framebuffer, t1 | geombuffer[]
     
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC RootSigDesc(_countof(rootParams), rootParams);
 
@@ -274,13 +267,11 @@ void DxrContext::DispatchRays()
 
     commandList->SetDescriptorHeaps(1, descHeap.GetAddressOf());
     D3D12_GPU_DESCRIPTOR_HANDLE descHandle = descHeap->GetGPUDescriptorHandleForHeapStart();
-    D3D12_GPU_DESCRIPTOR_HANDLE framebufferHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(descHandle, 0, sizeInDescHeap);
-    D3D12_GPU_DESCRIPTOR_HANDLE geomBufferHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(descHandle, 1, sizeInDescHeap);
 
     commandList->SetComputeRootConstantBufferView(0, constantBuffer->GetGPUVirtualAddress());
     commandList->SetComputeRootShaderResourceView(1, tlas->GetGPUVirtualAddress());
-    commandList->SetComputeRootDescriptorTable(2, framebufferHandle);
-    commandList->SetComputeRootDescriptorTable(3, geomBufferHandle);
+    commandList->SetComputeRootDescriptorTable(2, descHandle);
+    //commandList->SetComputeRootDescriptorTable(3, geomBufferHandle);
 
     //TODO: need a shader library resource
     D3D12_DISPATCH_RAYS_DESC rayDesc = {
