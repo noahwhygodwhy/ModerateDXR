@@ -18,6 +18,8 @@ This is the same one, but on a 3080ti: (don't mind that it's brighter, the 7900x
 
 After cloning, the vs project should just be ready to build/run.
 
+The pre-build step runs DXC on the shaders.hlsl file to proeuce shaders.h, which has the array of bytes representing the dxil.
+
 ## What pt 2
 
 The main function is in ModerateDXR.cpp. It 
