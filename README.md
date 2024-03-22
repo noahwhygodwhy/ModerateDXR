@@ -8,7 +8,7 @@ This is colored by the normals calculated from vertices accessed by geometryData
 This is the result from a 7900xtx on most recent webpost 24.3.1
 ![image](https://github.com/noahwhygodwhy/ModerateDXR/assets/9063267/9f300b8a-bcc3-43db-bc54-93982f9fef81)
 
-This is the same one, but on a 3080ti:
+This is the same one, but on a 3080ti: (don't mind that it's brighter, the 7900xtx one was screenshotted on an HDR monitor, runs on a non-HDR monitor still reproduce)
 ![image](https://github.com/noahwhygodwhy/ModerateDXR/assets/9063267/b93e7585-e80d-4642-b78e-e9ac8df30eac)
 
 
