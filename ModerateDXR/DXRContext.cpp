@@ -24,7 +24,7 @@ void DxrContext::CreateScreenSizedResources()
         .Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
         .Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
     };
-    //D3D12_CLEAR_VALUE clearVal = { .Format = DXGI_FORMAT_R16G16B16A16_FLOAT, .Color = {0.0, 0.0, 0.0, 1.0} };
+
     TIF(this->device->CreateCommittedResource(
         &fbProps,
         D3D12_HEAP_FLAG_NONE,
@@ -35,14 +35,61 @@ void DxrContext::CreateScreenSizedResources()
 
     framebuffer->SetName(L"framebuffer");
 
-    D3D12_UNORDERED_ACCESS_VIEW_DESC vd = {
-        .Format = DXGI_FORMAT_R16G16B16A16_FLOAT, 
+    D3D12_UNORDERED_ACCESS_VIEW_DESC framebufferViewDesc = {
+        .Format = DXGI_FORMAT_R16G16B16A16_FLOAT,
         .ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D,
         .Texture2D = {0, 0}
     };
-    // framebuffer is always the first one on the desc heap, index 0, and then every geom buffer entry
-    // goes on starting at index 1, 2, 3, ... ect
-    device->CreateUnorderedAccessView(framebuffer.Get(), nullptr, &vd, descHeap->GetCPUDescriptorHandleForHeapStart());
+
+    D3D12_CPU_DESCRIPTOR_HANDLE framebufferDescHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(descHeap->GetCPUDescriptorHandleForHeapStart(), 0, sizeOfResourceDesc);
+    device->CreateUnorderedAccessView(framebuffer.Get(), nullptr, &framebufferViewDesc, framebufferDescHandle);
+    D3D12_CPU_DESCRIPTOR_HANDLE cpuFramebufferDescHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cpuDescHeap->GetCPUDescriptorHandleForHeapStart(), 0, sizeOfResourceDesc);
+    device->CreateUnorderedAccessView(framebuffer.Get(), nullptr, &framebufferViewDesc, cpuFramebufferDescHandle);
+
+    D3D12_HEAP_PROPERTIES randBufferProps{
+        .Type = D3D12_HEAP_TYPE_DEFAULT,
+        .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+        .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
+        .CreationNodeMask = 0,
+        .VisibleNodeMask = 0
+    };
+    D3D12_RESOURCE_DESC randBufferDesc{
+        .Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+        .Alignment = 0,
+        .Width = this->screenWidth,
+        .Height = this->screenHeight,
+        .DepthOrArraySize = 1,
+        .MipLevels = 1,
+        .Format = DXGI_FORMAT_R32G32_UINT,
+        .SampleDesc = DXGI_SAMPLE_DESC{.Count = 1, .Quality = 0},
+        .Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
+        .Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+    };
+
+    TIF(this->device->CreateCommittedResource(
+        &randBufferProps,
+        D3D12_HEAP_FLAG_NONE,
+        &randBufferDesc,
+        D3D12_RESOURCE_STATE_COMMON,
+        nullptr,
+        IID_PPV_ARGS(&randBuffer)));
+
+    randBuffer->SetName(L"randBuffer");
+
+    D3D12_UNORDERED_ACCESS_VIEW_DESC randbufferViewDesc = {
+        .Format = DXGI_FORMAT_R32G32_UINT,
+        .ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D,
+        .Texture2D = {0, 0}
+    };
+
+    D3D12_CPU_DESCRIPTOR_HANDLE randbufferDescHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(descHeap->GetCPUDescriptorHandleForHeapStart(), 1, sizeOfResourceDesc);
+    device->CreateUnorderedAccessView(randBuffer.Get(), nullptr, &randbufferViewDesc, randbufferDescHandle);
+
+    D3D12_RESOURCE_BARRIER fbSetupbarrier = D3D12_RESOURCE_BARRIER{ .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION, .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE, .Transition = {.pResource = framebuffer.Get(), .StateBefore = D3D12_RESOURCE_STATE_COMMON, .StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS} };
+    commandList->ResourceBarrier(1, &fbSetupbarrier);
+
+
+
 }
 
 void DxrContext::DoResize(float ct)
@@ -55,6 +102,7 @@ void DxrContext::DoResize(float ct)
     this->backbuffer.Reset();
     swapChain->ResizeBuffers(2, this->screenWidth, this->screenHeight, DXGI_FORMAT_R16G16B16A16_FLOAT, 0);
     this->CreateScreenSizedResources();
+    this->PopulateAndCopyRandBuffer();//TODO: double check this is correct here
     this->needResize = false;
     
 }
@@ -71,9 +119,10 @@ void DxrContext::BuildRootSignature()
     ComPtr<ID3DBlob> blob;
 
 
-    CD3DX12_DESCRIPTOR_RANGE1 descRanges[2];
-    descRanges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0); //u0 framebuffer
-    descRanges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE); //t1 | geombuffer[]
+    CD3DX12_DESCRIPTOR_RANGE1 descRanges[3];
+    descRanges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, /*u*/0, 0); //u0 framebuffer
+    descRanges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, /*u*/1, 0); //u1 framebuffer
+    descRanges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, /*t*/1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE); //t1 | geombuffer[]
 
 
     CD3DX12_ROOT_PARAMETER1 rootParams[3];
@@ -91,13 +140,21 @@ void DxrContext::BuildRootSignature()
     TIF(device->CreateRootSignature(0, pSerializedRootSig->GetBufferPointer(), pSerializedRootSig->GetBufferSize(), IID_PPV_ARGS(&rootSignature)));
 }
 
+
+
+#define HG_WHITE    0
+#define HG_SHINYRED 1
+#define HG_LIGHT    2
+#define HG_METAL    3
+#define HG_MIRROR   4
+
 const static HitGroupData hgdata[] =
 {
-    HitGroupData(L"normalcolors"),
-    // HitGroupData(L"red"),
-    // HitGroupData(L"checkerboard"),
-    // HitGroupData(L"mirror"),
-    // HitGroupData(L"skybox"),
+    HitGroupData(L"white"),
+    HitGroupData(L"shinyred"),
+    HitGroupData(L"light"),
+    HitGroupData(L"metal"),
+    HitGroupData(L"mirror"),
 };
 void DxrContext::BuildPipelineStateObject()
 {
@@ -197,9 +254,17 @@ DxrContext::DxrContext(HWND hwnd, uint initWidth, uint initHeight)
         .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
     };
     TIF(device->CreateDescriptorHeap(&descHeapDesc, IID_PPV_ARGS(&descHeap)));
+
+    D3D12_DESCRIPTOR_HEAP_DESC cpuDescHeapDesc = {
+        .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+        .NumDescriptors = 1, //just the framebuffer
+        .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE
+    };
+    TIF(device->CreateDescriptorHeap(&cpuDescHeapDesc, IID_PPV_ARGS(&cpuDescHeap)));
+
+    this->sizeOfResourceDesc = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     this->BuildRootSignature();
     this->BuildPipelineStateObject();
-    this->CreateScreenSizedResources();
 
     TIF(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&commandAllocator)));
     TIF(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, commandAllocator.Get(), nullptr, IID_PPV_ARGS(&commandList)));
@@ -305,9 +370,12 @@ void DxrContext::DispatchRays()
 {
     commandList->SetPipelineState1(pso.Get());
     commandList->SetComputeRootSignature(rootSignature.Get());
-    //ID3D12DescriptorHeap* hp = descHeap.Get();
     commandList->SetDescriptorHeaps(1, descHeap.GetAddressOf());
     D3D12_GPU_DESCRIPTOR_HANDLE descHandle = descHeap->GetGPUDescriptorHandleForHeapStart();
+    float empty[4] = { 0, 0, 0, 0 };
+    //commandList->ClearUnorderedAccessViewFloat(descHeap->GetGPUDescriptorHandleForHeapStart(), cpuDescHeap->GetCPUDescriptorHandleForHeapStart(), this->framebuffer.Get(), empty, 0, NULL);
+    D3D12_RESOURCE_BARRIER clearBarrier = CD3DX12_RESOURCE_BARRIER::UAV(framebuffer.Get());
+    commandList->ResourceBarrier(1, &clearBarrier);
     commandList->SetComputeRootConstantBufferView(0, constantBuffer->GetGPUVirtualAddress());//TODO: need a constant buffer
     commandList->SetComputeRootShaderResourceView(1, tlas->GetGPUVirtualAddress());
     commandList->SetComputeRootDescriptorTable(2, descHandle);
@@ -325,14 +393,92 @@ void DxrContext::DispatchRays()
     
 }
 
+uint RoundUp(uint val, uint toRoundTo)
+{
+    if (val % toRoundTo == 0) return val;
+
+    return ((val / toRoundTo) + 1) * toRoundTo;
+}
+
+void DxrContext::PopulateAndCopyRandBuffer()
+{
+    if (randUploadBuffer) { randUploadBuffer.Reset(); }
+
+    //D3D12_RESOURCE_DESC randUploadBuffDesc = randBuffer->GetDesc();
+    CD3DX12_RESOURCE_DESC randUploadBuffDesc = CD3DX12_RESOURCE_DESC::Buffer(this->screenWidth * this->screenHeight * sizeof(uint64_t));
+    /*D3D12_RESOURCE_DESC randUploadBuffDesc {
+    .Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+    .Alignment = 0,
+    .Width = this->screenWidth*this->screenHeight * sizeof(uint64_t),
+    .Height = this->screenHeight,
+    .DepthOrArraySize = 1,
+    .MipLevels = 1,
+    .Format = DXGI_FORMAT_R16G16B16A16_UINT,
+    .SampleDesc = DXGI_SAMPLE_DESC{.Count = 1, .Quality = 0},
+    .Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
+    .Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+    };*/
+
+    D3D12_HEAP_PROPERTIES randUploadBuffProps{
+    .Type = D3D12_HEAP_TYPE_UPLOAD,
+    .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+    .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
+    .CreationNodeMask = 0,
+    .VisibleNodeMask = 0
+    };
+    
+    TIF(this->device->CreateCommittedResource(
+        &randUploadBuffProps,
+        D3D12_HEAP_FLAG_NONE,
+        &randUploadBuffDesc,
+        D3D12_RESOURCE_STATE_COMMON,
+        nullptr,
+        IID_PPV_ARGS(&randUploadBuffer)));
+
+    uint32* randomPtr;
+    TIF(randUploadBuffer->Map(0, nullptr, (void**)&randomPtr));
+    std::random_device rd;
+    std::mt19937 e2(rd());
+    //TODO: investigate method to make random_device thread safe (by having <omp parallel> number of random_devices in an array)
+    
+    for (uint i = 0; i < screenWidth * screenHeight * 2; i++) //width * height * 2 as each is actually 64 bit, but we're doing it in chunks of 32
+    {
+        randomPtr[i] = e2();
+    }
+    randUploadBuffer->Unmap(0, nullptr);
+
+
+    auto footprint = CD3DX12_SUBRESOURCE_FOOTPRINT(randBuffer->GetDesc(), RoundUp(this->screenWidth * sizeof(uint64_t), D3D12_TEXTURE_DATA_PITCH_ALIGNMENT));
+    D3D12_PLACED_SUBRESOURCE_FOOTPRINT placedTexture2D = { 0 };
+    placedTexture2D.Offset = 0;
+    placedTexture2D.Footprint = footprint;
+
+    auto copyDest = CD3DX12_TEXTURE_COPY_LOCATION(randBuffer.Get(), 0);
+    auto copySrc = CD3DX12_TEXTURE_COPY_LOCATION(randUploadBuffer.Get(), placedTexture2D);
+
+
+    D3D12_RESOURCE_BARRIER barriers[] = {
+    D3D12_RESOURCE_BARRIER{.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION, .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE, .Transition = {.pResource = randUploadBuffer.Get(), .StateBefore = D3D12_RESOURCE_STATE_COMMON, .StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE}},
+    D3D12_RESOURCE_BARRIER{.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION, .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE, .Transition = {.pResource = randBuffer.Get(), .StateBefore = D3D12_RESOURCE_STATE_PRESENT, .StateAfter = D3D12_RESOURCE_STATE_COPY_DEST}},
+    D3D12_RESOURCE_BARRIER{.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION, .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE, .Transition = {.pResource = randUploadBuffer.Get(), .StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE, .StateAfter = D3D12_RESOURCE_STATE_COMMON} },
+    D3D12_RESOURCE_BARRIER{.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION, .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE, .Transition = {.pResource = randBuffer.Get(), .StateBefore = D3D12_RESOURCE_STATE_COPY_DEST, .StateAfter = D3D12_RESOURCE_STATE_PRESENT} } };
+    commandList->ResourceBarrier(2, &barriers[0]);
+    commandList->CopyTextureRegion(
+        &copyDest,
+        0, 0, 0,
+        &copySrc,
+        nullptr);
+    commandList->ResourceBarrier(2, &barriers[2]);
+}
+
 void DxrContext::CopyFramebuffer()
 {
     uint a = swapChain->GetCurrentBackBufferIndex();
     TIF(swapChain->GetBuffer(a, IID_PPV_ARGS(&backbuffer)));
     D3D12_RESOURCE_BARRIER barriers[] = { 
-        D3D12_RESOURCE_BARRIER{.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION, .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE, .Transition = {.pResource = framebuffer.Get(), .StateBefore = D3D12_RESOURCE_STATE_COMMON, .StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE}},
+        D3D12_RESOURCE_BARRIER{.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION, .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE, .Transition = {.pResource = framebuffer.Get(), .StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS, .StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE}},
         D3D12_RESOURCE_BARRIER{.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION, .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE, .Transition = {.pResource = backbuffer.Get(), .StateBefore = D3D12_RESOURCE_STATE_PRESENT, .StateAfter = D3D12_RESOURCE_STATE_COPY_DEST}},
-        D3D12_RESOURCE_BARRIER{.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION, .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE, .Transition = {.pResource = framebuffer.Get(), .StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE, .StateAfter = D3D12_RESOURCE_STATE_COMMON} },
+        D3D12_RESOURCE_BARRIER{.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION, .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE, .Transition = {.pResource = framebuffer.Get(), .StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE, .StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS} },
         D3D12_RESOURCE_BARRIER{.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION, .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE, .Transition = {.pResource = backbuffer.Get(), .StateBefore = D3D12_RESOURCE_STATE_COPY_DEST, .StateAfter = D3D12_RESOURCE_STATE_PRESENT} } };
     commandList->ResourceBarrier(2, &barriers[0]);
     commandList->CopyResource(backbuffer.Get(), framebuffer.Get());
@@ -341,7 +487,7 @@ void DxrContext::CopyFramebuffer()
 
 void DxrContext::Present()
 {
-    this->swapChain->Present(1, 0);
+    this->swapChain->Present(0, 0);
     frameNumber++;
 }
 
@@ -353,25 +499,21 @@ void DxrContext::Flush()
     WaitForSingleObjectEx(h, INFINITE, false);
     this->fenceValue++;
 }
+void DxrContext::ClearFramebuffer()
+{
+
+}
 
 void DxrContext::Render(float ct)
 {
-    //OutputDebugStringF("on render\n");
     this->ResetCommandList();
+    this->ClearFramebuffer();
     this->BuildTlas();
     this->DispatchRays();
     this->CopyFramebuffer();
-
-    this->swapChainEvent = this->swapChain->GetFrameLatencyWaitableObject();
-
     this->ExecuteCommandList();
     this->Flush();
     this->Present();
-
-    this->Flush();
-    //WaitForSingleObjectEx(swapChainEvent, INFINITE, FALSE);
-    if(this->needResize) { this->DoResize(ct); }
-    this->Flush();
 }
 
 void DxrContext::alterInstanceTransform(uint index, mat4x4 tx)

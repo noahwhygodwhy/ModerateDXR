@@ -135,12 +135,13 @@
       <AdditionalDependencies>WinPixEventRuntime.lib;dxcompiler.lib;d3d12.lib;dxgi.lib;d3dcompiler.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PreBuildEvent>
-      <Command>dxc -HV 2021 -enable-16bit-types -T lib_6_6 -Wall -Wextra -Zi shaders.hlsl -Fh shader.h /Vn compiledShader</Command>
+      <Command>dxc -HV 2021 -Od -enable-16bit-types -T lib_6_6 -Wall -Wextra -Zi shaders.hlsl -Fh shader.h /Vn compiledShader</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="common.h" />
     <ClInclude Include="DxrContext.hpp" />
+    <ClInclude Include="Material.h" />
     <ClInclude Include="Mesh.hpp" />
     <ClInclude Include="pixtras.hpp" />
     <ClInclude Include="Raytracable.hpp" />

@@ -47,7 +47,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 //static DxrContext* ctx;
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow)
 {
-
+    OutputDebugStringF("Starting\n");
 #if _DEBUG
     HMODULE pixLib = LoadLibrary(GetLatestWinPixGpuCapturerPath_Cpp17().c_str());
 #endif
@@ -99,13 +99,21 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
     Instance iCapy(
         capy, 
-        transpose(scale(translate(rotate(mat4x4(1), radians(45.0f), fvec3(0, 1, 0)), fvec3(-1, -3, 0)), fvec3(0.5, 0.5, 0.5))), 
+        Transform{ .translate = fvec3(1, 3, 0), .rotateDegrees = 30 }(),
+        //transpose(translate(rotate(mat4x4(1), radians(45.0f), fvec3(0, 1, 0)), fvec3(0, 0, 0))), 
         0, //hit group
         2);//instance id
     instances.push_back(&iCapy);
+
+    //Instance lightBox(
+    //    cube,
+    //    transpose(scale(translate(rotate(mat4x4(1), radians(45.0f), fvec3(0, 1, 0)), fvec3(1, 3, 0)), fvec3(0.1, 0.1, 0.1))),
+    //)
+
     Instance iCapy2(
-        capy, 
-        transpose(scale(translate(rotate(mat4x4(1), radians(45.0f), fvec3(0, 1, 0)), fvec3(1, -3, 0)), fvec3(0.5, 0.5, 0.5))),
+        capy,
+        Transform{ .translate = fvec3(1, 10, 0), .rotateDegrees = 45 }(),
+        //transpose(scale(translate(rotate(mat4x4(1), radians(45.0f), fvec3(0, 1, 0)), fvec3(1, 3, 0)), fvec3(0.1, 0.1, 0.1))),
         0, //hit group
         2);//instance id
     instances.push_back(&iCapy2);
@@ -113,22 +121,22 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     instances.push_back(&iB);*/
     Instance instanceCube(
         cube,
-        glm::transpose(glm::scale(glm::translate(mat4x4(1.0f), fvec3(0, -4.5, 0)), fvec3(100, 1, 100))),
+        glm::transpose(glm::scale(glm::translate(mat4x4(1.0f), fvec3(0, 0, 0)), fvec3(100, 1, 100))),
         0, //hit group
         0);//instance id
     instances.push_back(&instanceCube);
 
     for (Instance* i : instances) ctx->instanceDescs.push_back(i->GetInstanceDesc());
-
     ctx->commandList->ResourceBarrier((uint32_t)blasBarriers.size(), blasBarriers.data());
+    ctx->CreateScreenSizedResources();
+    ctx->PopulateAndCopyRandBuffer();
     ctx->ExecuteCommandList();
     ctx->Flush();
 
-    ctx->constants->camPos = float3(0, 1, 5);
+    ctx->constants->camPos = float3(0, 10, 10);
     ctx->constants->fov = glm::radians(90.0f);
-    ctx->constants->lookAt = float3(0, 0.0, 0);
+    ctx->constants->lookAt = float3(0, 5.0, 0);
     ctx->constants->ct = 0.0f;
-    //ctx->constants->numSamples = 64;
 
     //TODO: if the number of instances changes, this will need to be redone
     ctx->CreateTlasResources(ctx->instanceDescs);
@@ -136,9 +144,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
     ctx->startTimePoint = std::chrono::high_resolution_clock::now();
     ctx->lastFrameTimePoint = std::chrono::high_resolution_clock::now();
-
     function<void(HWND hwnd)> wm_paint_fn = [ctx, &instances](HWND hwnd) {
-
         auto nowTimePoint = std::chrono::high_resolution_clock::now();
 
 
@@ -151,16 +157,23 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         float dt = float(dTDurr.count());
 
 
-        ctx->constants->camPos = float3(sin(ct) * 5, 1, cos(ct) * 5);
+        //ctx->constants->camPos = float3(sin(ct) * 5, 1, cos(ct) * 5);
         ctx->UploadInstanceDescs(ctx->instanceDescs);
-
+        //ctx->PopulateAndCopyRandBuffer();
+        ctx->constants->ct = ct;
+        ctx->constants->frameNumber++;
         //ctx->alterInstanceTransform(0, glm::rotate(mat4(1), radians(90.0f) * dt, fvec3(0, 1, 0)));;
         //iCapy.transform = glm::rotate(iCapy.transform, radians(90.0f) * dt, fvec3(0, 1, 0));
         // 
         //auto g = ctx->instanceDescs[0].Transform;
         //glm::mat3x4(ctx->instanceDescs[0].Transform);
-
+        if (ctx->constants->frameNumber % NUM_SAMPLES == 0)
+        {
+            OutputDebugStringF("done with that frame\n");
+            system("pause");
+        }
         ctx->Render(ct);
+        //system("pause");
         };
 
 

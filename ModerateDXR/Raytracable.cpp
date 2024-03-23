@@ -8,7 +8,7 @@ void Raytracable::ReleaseScratch() {
 
 void Raytracable::AddGeomSRV(ComPtr<ID3D12Device10> device, ComPtr<ID3D12DescriptorHeap> descHeap)
 {
-    static uint nextDescHeapIndex = 1;
+    static uint nextDescHeapIndex = NUM_RESOURCES_BEFORE_GEOM;
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc =
     {
         .Format = DXGI_FORMAT_UNKNOWN,

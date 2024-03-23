@@ -5,6 +5,7 @@
 
 constexpr float resizeDebounce = 0.1f;
 
+
 struct HitGroupData
 {
 	wstring hgName;
@@ -20,6 +21,25 @@ struct HitGroupData
 	}
 };
 
+
+//This is specifically meant for d3d12 dxr instance descs
+struct Transform
+{
+	fvec3 translate;
+	float rotateDegrees;
+	fvec3 rotateAxis = fvec3(0, 1, 0);
+	fvec3 scale = fvec3(1, 1, 1);
+	fmat4x4 operator()()
+	{
+		fmat4x4 retVal = mat4(1);
+		retVal = glm::scale(retVal, this->scale);
+		retVal = glm::rotate(retVal, glm::radians(rotateDegrees), rotateAxis);
+		retVal = glm::translate(retVal, this->translate);
+		retVal = glm::transpose(retVal);
+		return retVal;
+	}
+};
+
 class DxrContext
 {
 public:
@@ -28,6 +48,8 @@ public:
 	void* MapConstantBuffer();
 	void SetResize(uint initWidth, uint initHeight);
 	void CreateScreenSizedResources();
+	void ClearFramebuffer();
+	void PopulateAndCopyRandBuffer();
 	void BuildTlas();
 	void DispatchRays();
 	void CopyFramebuffer();
@@ -35,13 +57,13 @@ public:
 	void ResetCommandList();
 	void ExecuteCommandList();
 	void Flush();
-	void FullFlush();
 	void Render(float ct);
 	void CreateTlasResources(vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs);
 	void UploadInstanceDescs(vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs);
 	ComPtr<ID3D12Device10> device;
 	ComPtr<ID3D12GraphicsCommandList4> commandList;
 	ComPtr<ID3D12DescriptorHeap> descHeap;
+	ComPtr<ID3D12DescriptorHeap> cpuDescHeap;
 	ConstantBufferStruct* constants;
 	vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs;
 	std::chrono::steady_clock::time_point startTimePoint;
@@ -77,9 +99,15 @@ private:
 	ComPtr<ID3D12Resource> constantBuffer;
 	ComPtr<ID3D12Resource> shaderBuffer;
 	ComPtr<ID3D12Resource> instanceBuffer;
-	ComPtr<ID3D12Resource> framebuffer;
 	ComPtr<ID3D12Resource> backbuffer;
+	
+	uint sizeOfResourceDesc;
 
+	ComPtr<ID3D12Resource> randUploadBuffer;
+//#define NUM_RESOURCES_BEFORE_GEOM 2
+	ComPtr<ID3D12Resource> randBuffer;
+	ComPtr<ID3D12Resource> framebuffer;
+// the above are the two resources before the geom buffers in the desc heap
 	ComPtr<ID3D12Resource> tlas;
 	ComPtr<ID3D12Resource> tlasScratch;
 

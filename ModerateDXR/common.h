@@ -5,6 +5,8 @@
 #include <string>
 #include <format>
 #include <chrono>
+#include <random>
+#include <map>
 
 #include <windows.h>
 #include <d3d12.h>

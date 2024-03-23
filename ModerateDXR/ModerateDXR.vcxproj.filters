@@ -36,6 +36,9 @@
     <ClInclude Include="pixtras.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Material.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ModerateDXR.cpp">
@@ -67,21 +70,13 @@
     <CopyFileToFolders Include="sphere.obj">
       <Filter>Resource Files</Filter>
     </CopyFileToFolders>
+    <CopyFileToFolders Include="capybara.obj" />
+    <CopyFileToFolders Include="cube.obj" />
+    <CopyFileToFolders Include="monkey.obj" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="CookTorrance.hlsl">
       <Filter>Header Files\shaders</Filter>
     </FxCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <Object Include="capybara.obj">
-      <Filter>Resource Files</Filter>
-    </Object>
-    <Object Include="cube.obj">
-      <Filter>Resource Files</Filter>
-    </Object>
-    <Object Include="monkey.obj">
-      <Filter>Resource Files</Filter>
-    </Object>
   </ItemGroup>
 </Project>

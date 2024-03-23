@@ -72,7 +72,7 @@ float3 CookTorance(
 	const float3 F0,
 	inout float3 kS)
 {
-
+    (void)prevIOR;
 
     //float2 uv = minRayResult.uv.xy;
 	

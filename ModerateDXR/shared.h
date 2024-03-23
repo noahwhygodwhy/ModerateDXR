@@ -13,7 +13,7 @@ using float16_t4 = glm::u16vec4;
 #ifdef __cplusplus
 #pragma pack(push, 4)
 #endif
-
+#define NUM_SAMPLES 8096
 #define MAX_RECURSION_LAYERS 16
 #define PI 3.14159265f
 struct ConstantBufferStruct
@@ -22,6 +22,7 @@ struct ConstantBufferStruct
     float ct;
     float3 lookAt;
     float fov;
+    uint frameNumber;
 };
 
 struct RayPayload
@@ -29,9 +30,8 @@ struct RayPayload
     float3 accum;
     uint layer;
     float3 mask;
-    uint seed;
+    uint padd;
 };
-
 
 struct Vert
 {
@@ -42,45 +42,17 @@ struct Tringle
     Vert verts[3];
 };
 
-
-
 struct Material
 {
-// #ifdef __cplusplus
-// 	Material(
-// 		float3 color = float3(1.0f, 1.0f, 1.0f),
-// 		float3 emission = float3(0.0f, 0.0f, 0.0f),
-// 		float ni = 1.0f,
-// 		float ns = 1.0,
-// 		float trans = 0.0,
-// 		float metal = 0.0,
-// 		float smooth = 0.0,
-// 		uint indicator = 0)
-// 	{
-// 		this->color = color;
-// 		this->emission = emission;
-// 		this->ni = ni;
-// 		this->ns = ns;
-// 		this->trans = trans;
-// 		this->metal = metal;
-// 		this->smooth = smooth;
-// 		this->indicator = indicator;
-// 	}
-    
-// #endif // __cplusplus
-
     float3 color; //base color
-    float ni; //index of refracton
-    float3 emission; //light emissition 
-    float ns; //specular exponent
-    float trans; //transparency
-    float metal; //metalness
     float smooth; //smoothness
+    float3 emission; //light emissition 
+    float trans; //transparency
+    float ns; //specular exponent
+    float ni; //index of refracton
+    float metal; //metalness
     uint indicator;
 };
-
-
-
 
 #ifdef __cplusplus
 #pragma pack(pop, 4)

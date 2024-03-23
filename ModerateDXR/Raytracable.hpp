@@ -1,6 +1,8 @@
 #pragma once
 #include "common.h"
 
+#define NUM_RESOURCES_BEFORE_GEOM 2
+
 class Raytracable 
 {
 protected:
