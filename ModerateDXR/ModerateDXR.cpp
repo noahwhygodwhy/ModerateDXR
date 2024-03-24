@@ -51,8 +51,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 #if _DEBUG
     HMODULE pixLib = LoadLibrary(GetLatestWinPixGpuCapturerPath_Cpp17().c_str());
 #endif
-    const uint defaultWidth = 800;
-    const uint defaultHeight = 600;
+    const uint defaultWidth = 1920;
+    const uint defaultHeight = 1080;
 
     WNDCLASSEX classDescriptor = {
         .cbSize = sizeof(WNDCLASSEX),
@@ -99,32 +99,31 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
     Instance iCapy(
         capy, 
-        Transform{ .translate = fvec3(1, 3, 0), .rotateDegrees = 30 }(),
-        //transpose(translate(rotate(mat4x4(1), radians(45.0f), fvec3(0, 1, 0)), fvec3(0, 0, 0))), 
-        0, //hit group
+        Transform{ .translate = fvec3(0, 0, 0), .rotateDegrees = 30 }(),
+        HG_SHINYRED, //hit group
         2);//instance id
     instances.push_back(&iCapy);
 
-    //Instance lightBox(
-    //    cube,
-    //    transpose(scale(translate(rotate(mat4x4(1), radians(45.0f), fvec3(0, 1, 0)), fvec3(1, 3, 0)), fvec3(0.1, 0.1, 0.1))),
-    //)
+    //Instance iCapy2(
+    //    capy,
+    //    Transform{ .translate = fvec3(5, 5, 0), .rotateDegrees = 45}(),
+    //    HG_MIRROR, //hit group
+    //    2);//instance id
+    //instances.push_back(&iCapy2);
 
-    Instance iCapy2(
-        capy,
-        Transform{ .translate = fvec3(1, 10, 0), .rotateDegrees = 45 }(),
-        //transpose(scale(translate(rotate(mat4x4(1), radians(45.0f), fvec3(0, 1, 0)), fvec3(1, 3, 0)), fvec3(0.1, 0.1, 0.1))),
-        0, //hit group
-        2);//instance id
-    instances.push_back(&iCapy2);
- /*   Instance iB(cube, glm::transpose(glm::translate(scale(mat4x4(1), fvec3(5)), fvec3(0, 0, -10))), 2);
-    instances.push_back(&iB);*/
-    Instance instanceCube(
+    Instance iLightCube(
         cube,
-        glm::transpose(glm::scale(glm::translate(mat4x4(1.0f), fvec3(0, 0, 0)), fvec3(100, 1, 100))),
-        0, //hit group
+        Transform{ .translate = fvec3(-6, 6, 0), .rotateDegrees = 45, .rotateAxis = fvec3(0, 0, 1), .scale = fvec3(2, 0.1, 2) }(),
+        HG_LIGHT,
+        0);
+    instances.push_back(&iLightCube);
+
+    Instance iFloor(
+        cube,
+        Transform{ .translate = fvec3(0, -1, 0), .rotateDegrees = 0, .rotateAxis = fvec3(0, 1, 0), .scale = fvec3(20, 1, 20)}(),
+        HG_WHITE, //hit group
         0);//instance id
-    instances.push_back(&instanceCube);
+    instances.push_back(&iFloor);
 
     for (Instance* i : instances) ctx->instanceDescs.push_back(i->GetInstanceDesc());
     ctx->commandList->ResourceBarrier((uint32_t)blasBarriers.size(), blasBarriers.data());
@@ -135,7 +134,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
     ctx->constants->camPos = float3(0, 10, 10);
     ctx->constants->fov = glm::radians(90.0f);
-    ctx->constants->lookAt = float3(0, 5.0, 0);
+    ctx->constants->lookAt = float3(0, 2.5, 0);
     ctx->constants->ct = 0.0f;
 
     //TODO: if the number of instances changes, this will need to be redone
@@ -169,8 +168,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         //glm::mat3x4(ctx->instanceDescs[0].Transform);
         if (ctx->constants->frameNumber % NUM_SAMPLES == 0)
         {
-            OutputDebugStringF("done with that frame\n");
-            system("pause");
+            //OutputDebugStringF("done with that frame\n");
+            //system("pause");
         }
         ctx->Render(ct);
         //system("pause");

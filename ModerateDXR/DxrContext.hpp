@@ -6,6 +6,16 @@
 constexpr float resizeDebounce = 0.1f;
 
 
+#define HG_WHITE     0
+#define HG_SHINYRED  1
+#define HG_LIGHT     2
+#define HG_METAL     3
+#define HG_MIRROR    4
+#define HG_CHECKERED 5
+
+
+
+
 struct HitGroupData
 {
 	wstring hgName;
@@ -21,6 +31,15 @@ struct HitGroupData
 	}
 };
 
+const static HitGroupData hgdata[] =
+{
+	HitGroupData(L"white"),
+	HitGroupData(L"shinyred"),
+	HitGroupData(L"light"),
+	HitGroupData(L"metal"),
+	HitGroupData(L"mirror"),
+	HitGroupData(L"checkered"),
+};
 
 //This is specifically meant for d3d12 dxr instance descs
 struct Transform
@@ -32,9 +51,9 @@ struct Transform
 	fmat4x4 operator()()
 	{
 		fmat4x4 retVal = mat4(1);
-		retVal = glm::scale(retVal, this->scale);
-		retVal = glm::rotate(retVal, glm::radians(rotateDegrees), rotateAxis);
 		retVal = glm::translate(retVal, this->translate);
+		retVal = glm::rotate(retVal, glm::radians(rotateDegrees), rotateAxis);
+		retVal = glm::scale(retVal, this->scale);
 		retVal = glm::transpose(retVal);
 		return retVal;
 	}

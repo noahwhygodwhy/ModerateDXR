@@ -140,22 +140,6 @@ void DxrContext::BuildRootSignature()
     TIF(device->CreateRootSignature(0, pSerializedRootSig->GetBufferPointer(), pSerializedRootSig->GetBufferSize(), IID_PPV_ARGS(&rootSignature)));
 }
 
-
-
-#define HG_WHITE    0
-#define HG_SHINYRED 1
-#define HG_LIGHT    2
-#define HG_METAL    3
-#define HG_MIRROR   4
-
-const static HitGroupData hgdata[] =
-{
-    HitGroupData(L"white"),
-    HitGroupData(L"shinyred"),
-    HitGroupData(L"light"),
-    HitGroupData(L"metal"),
-    HitGroupData(L"mirror"),
-};
 void DxrContext::BuildPipelineStateObject()
 {
     D3D12_DXIL_LIBRARY_DESC libraryDesc = { .DXILLibrary = {.pShaderBytecode = compiledShader,.BytecodeLength = std::size(compiledShader)} };

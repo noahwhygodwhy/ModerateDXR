@@ -1,5 +1,6 @@
 #pragma once
 #include "common.h"
+#include "shared.h"
 #include "Raytracable.hpp"
 
 class Mesh : public Raytracable
@@ -7,6 +8,7 @@ class Mesh : public Raytracable
 private:
 	//vector<uint32_t> indices;
 	vector<fvec3> verts;
+	vector<fvec3> norms;
 public:
 	Mesh(string filepath);
 	~Mesh();

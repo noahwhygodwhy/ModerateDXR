@@ -36,7 +36,13 @@ inline float randFloat0505(in uint2 pixelID)
     return (randFloat01(pixelID)) - 0.5;
 }
 
-const float FLOAT_MAX = 3.402823466e+38F;//
+//Don't use this if it's a procedural geometry
+uint numTriangles()
+{
+    uint numtris, stride;
+    geomdata[NonUniformResourceIndex(InstanceID())].GetDimensions(numtris, stride);
+    return numtris/2;
+}
 
 [shader("raygeneration")]
 void RayGeneration()
@@ -123,10 +129,30 @@ float3 doTransform(float3 vec3, float4x3 mat4x3)
 }
 
 
+// float3 getWorldSpaceNormal()
+// {
+//     uint offset = numTriangles();
+//     Tringle normals = geomdata[NonUniformResourceIndex(InstanceID()) + offset][NonUniformResourceIndex(PrimitiveIndex())];
+//     //float3 pos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
+    
+//     // float3 a = normals.verts[0].pos;
+//     // float3 b = normals.verts[1].pos;
+//     // float3 c = normals.verts[2].pos;
+    
+//     // float3 ba = b - a;
+//     // float3 ca = c - a;
+//     // float3 normal = cross(ba, ca);
+//     // normal = normalize(mul((float3x3)ObjectToWorld4x3(), normal));
+//     return normals.verts[0].pos; // <= temp until uv to take into acocunt all 3 verts
+//     //normal = normalize(doTransform(normal, ObjectToWorld4x3()));
+//    /// return normal;
+// }
+
 float3 getWorldSpaceNormal()
 {
+    uint offset = numTriangles();
     Tringle tri = geomdata[NonUniformResourceIndex(InstanceID())][NonUniformResourceIndex(PrimitiveIndex())];
-    //float3 pos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
+    float3 pos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
     
     float3 a = tri.verts[0].pos;
     float3 b = tri.verts[1].pos;
@@ -136,88 +162,34 @@ float3 getWorldSpaceNormal()
     float3 ca = c - a;
     float3 normal = cross(ba, ca);
     normal = normalize(mul((float3x3)ObjectToWorld4x3(), normal));
-    //normal = normalize(doTransform(normal, ObjectToWorld4x3()));
     return normal;
+    //normal = normalize(doTransform(normal, ObjectToWorld4x3()));
+   /// return normal;
 }
+
 
 
 [shader("miss")]
 void Miss(inout RayPayload payload)
 {
-    if(payload.layer == 0) { payload.accum = float3(1, 0, 0); }
+    if(payload.layer == 0) { payload.accum = float3(0, 0, 0); }
     return;
     
 }
 
-void ShadeIt(
-inout RayPayload payload,
-in float3 normal,
-in float3 oldRayDir,
-in float3 newRayDir,
-in Material mat
-)
+float3 getColor(in Material mat)
 {
-    float3 lightDir = normalize(newRayDir);
-    float NdotL = dot(normal, normalize(lightDir));
-    float diffuse = NdotL;
-
-    float3 viewDir = -normalize(oldRayDir);
-    float3 H = normalize(lightDir + viewDir);
-    //TODO: better solution for this, if these two are the same, then it results in a NAN
-    if(all(oldRayDir == lightDir))
+    switch(mat.indicator)
     {
-        H = viewDir;
+        case 1:
+            //TODO: checker
+            return mat.color;
+            break;
+        default:
+            return mat.color;
     }
-    
-    float NdotH = dot(normal, H);
-    float specular = NdotH;
-    float3 nothin = payload.mask;
-    if(nothin.x == 50.03f || nothin.y == 50.03f || nothin.z == 50.03f)
-    {
-        return;
-    }
-    payload.accum += mat.emission * nothin;
-    payload.mask *= mat.color * (diffuse + specular);
 }
 
-
-void ShadeItCookTorance(
-inout RayPayload payload,
-in float3 normal,
-in float3 oldRayDir,
-in float3 newRayDir,
-in Material mat
-)
-{
-    float tf = abs((1.0 - mat.ni) / (1.0 + mat.ni));
-    float3 F0a = abs((1.0 - mat.ni) / (1.0 + mat.ni)).xxx;
-
-    //float3(tf, tf, tf);
-    F0a = F0a * F0a;
-
-    float3 F0 = lerp(F0a, mat.color, mat.metal);
-    //dvec3 ctSpecular = CookTorance(ray, reflectionRay, minRayResult, downstreamRadiance, minRayResult.shape->mat, currentIOR, F0, kS);
-    //TODO: need to keep the current ray
-    float3 kS;
-    float3 cT = max(CookTorance(oldRayDir, newRayDir, normal, mat.ni, F0, kS), 0.0f);
-    //blinn phong (ish)?
-    float3 R = reflect(newRayDir, normal); //   rotateVector(newRay.dir, PI, hr.normal); //TODO: not the right rotate
-
-
-    float3 V = -oldRayDir;
-    float3 N = normal;
-    float3 L = newRayDir;
-
-    float3 H = normalize((L + V));
-
-    float diff = max(dot(L, N), 0.0f);
-    float spec = max(dot(N, H), 0.0f);
-    float lightsum = diff + spec;
-    float3 kD = ((1.0f - kS) * (1.0f - mat.metal)); //*diff;
-
-    payload.accum += mat.emission * payload.mask;
-    payload.mask *= mat.color * ((diff * kD) + (cT));
-}
 
 float3 generateNewRayDir(float3 oldRayDir, in float3 normal)
 {
@@ -231,7 +203,7 @@ float3 generateNewRayDir(float3 oldRayDir, in float3 normal)
     float3 w = normal;
 
     /* compute two random numbers to pick a random point on the hemisphere above the hitpoint*/
-                    
+    
     float rand1 = 2.0f * PI * randFloat01(NonUniformResourceIndex(DispatchRaysIndex()).xy);
     float rand2 = randFloat01(NonUniformResourceIndex(DispatchRaysIndex()).xy);
 
@@ -244,6 +216,77 @@ float3 generateNewRayDir(float3 oldRayDir, in float3 normal)
     v = normalize(v);                
     return normalize(u * cos(rand1) * rand2s + v * sin(rand1) * rand2s + w * sqrt(1.0f - rand2));
 }
+
+void UnifiedShading(
+inout RayPayload payload,
+in Material mat
+)
+{
+    float3 normal = getWorldSpaceNormal();
+    payload.accum = abs(normal);
+    payload.accum.g += 0.1f;
+    return;
+    float3 pos = WorldRayOrigin() + (WorldRayDirection() * RayTCurrent());
+
+    //TODO: multiple rays for tree branching motecarlo for more efficient tracing?
+    // Maybe only branch after first hit..?
+    float3 oldRayDir = WorldRayDirection();
+    
+    float mirrorDecider = randFloat01(NonUniformResourceIndex(DispatchRaysIndex()).xy);
+    float3 newRayDir;
+    if(mat.smooth >= mirrorDecider)
+    {
+        newRayDir = reflect(oldRayDir, normal);
+    }
+    else
+    {
+        newRayDir = generateNewRayDir(oldRayDir, normal);
+    }
+
+    
+    { // Cook Torance shading model
+        //float tf = abs((1.0 - mat.ni) / (1.0 + mat.ni));
+        float3 F0a = abs((1.0 - mat.ni) / (1.0 + mat.ni)).xxx;
+
+        F0a = F0a * F0a;
+
+        float3 F0 = lerp(F0a, mat.color, mat.metal);
+        float3 kS = float3(0, 0, 0);
+        float3 cT = max(CookTorance(oldRayDir, newRayDir, normal, mat.ni, F0, kS), 0.0f);
+        //float3 R = reflect(newRayDir, normal);
+
+
+        float3 V = -oldRayDir;
+        float3 N = normal;
+        float3 L = newRayDir;
+
+        float3 H = normalize((L + V));
+
+        float diff = max(dot(L, N), 0.0f);
+        //float spec = max(dot(N, H), 0.0f);
+        //float lightsum = diff + spec;
+        float3 kD = ((1.0f - kS) * (1.0f - mat.metal));
+
+        payload.accum += mat.emission * payload.mask;
+        payload.mask *= mat.color * ((diff * kD) + (cT));
+    }
+    { // new ray stuff
+        payload.layer++;
+        if (payload.layer >= MAX_RECURSION_LAYERS || any(mat.emission > 0))
+        {
+            return;
+        }
+        
+        RayDesc ray;
+        ray.Origin = pos;// + (normal*0.001f);
+        ray.Direction = newRayDir;
+        ray.TMin = 0.001;
+        ray.TMax = 1000;
+        
+        TraceRay(scene, RAY_FLAG_FORCE_OPAQUE, 0xFF, 0, 0, 0, ray, payload);
+    }
+}
+
 
 [shader("closesthit")]
 void ch_white(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes attrib)
@@ -260,37 +303,95 @@ void ch_white(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes
     mat.metal = 0;
     mat.indicator = 0;
 
-    UnifiedShading(mat)
+    UnifiedShading(payload, mat);
+}
 
-    float3 normal = getWorldSpaceNormal();
-    float3 pos = WorldRayOrigin() + (WorldRayDirection() * RayTCurrent());
+[shader("closesthit")]
+void ch_shinyred(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes attrib)
+{
+    (void) attrib;
 
-    //TODO: a smooth surface will generate more reflected rays
-    float3 oldRayDir = WorldRayDirection();
-    float3 newRayDir = generateNewRayDir(oldRayDir, normal);
-    
-    ShadeItCookTorance(
-    //ShadeIt(
-        payload,
-        normal,
-        oldRayDir,
-        newRayDir,
-        0
-    );
-    
-    payload.layer++;// = payload.layer+1;//++;
-    //uint layer = payload.layer;
-    if (payload.layer >= MAX_RECURSION_LAYERS)
-    {
-        //payload.accum = float3(1, 0, 0);
-        return;
-    }
-    
-    RayDesc ray;
-    ray.Origin = pos;// + (normal*0.001f);
-    ray.Direction = newRayDir;
-    ray.TMin = 0.001;
-    ray.TMax = 1000;
-    
-    TraceRay(scene, RAY_FLAG_FORCE_OPAQUE, 0xFF, 0, 0, 0, ray, payload);
-};
+    Material mat = (Material)0;
+    mat.color = float3(1, 0.1, 0.1);
+    mat.smooth = 0.5f;
+    mat.emission = float3(0, 0, 0);
+    mat.trans = 0;
+    mat.ns = 1;
+    mat.ni = 1;
+    mat.metal = 0.1;
+    mat.indicator = 0;
+
+    UnifiedShading(payload, mat);
+}
+
+[shader("closesthit")]
+void ch_light(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes attrib)
+{
+    (void) attrib;
+
+    Material mat = (Material)0;
+    mat.color = float3(1, 1, 1);
+    mat.smooth = 0.9f;
+    mat.emission = float3(1, 1, 1); //TODO: brightness?
+    mat.trans = 0;
+    mat.ns = 1;
+    mat.ni = 1;
+    mat.metal = 0.1;
+    mat.indicator = 0;
+
+    UnifiedShading(payload, mat);
+}
+
+[shader("closesthit")]
+void ch_metal(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes attrib)
+{
+    (void) attrib;
+
+    Material mat = (Material)0;
+    mat.color = float3(1, 1, 1);
+    mat.smooth = 0.6f;
+    mat.emission = float3(0, 0, 0); //TODO: brightness?
+    mat.trans = 0;
+    mat.ns = 1;
+    mat.ni = 1;
+    mat.metal = 0.9;
+    mat.indicator = 0;
+
+    UnifiedShading(payload, mat);
+}
+
+[shader("closesthit")]
+void ch_mirror(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes attrib)
+{
+    (void) attrib;
+
+    Material mat = (Material)0;
+    mat.color = float3(1, 1, 1);
+    mat.smooth = 0.99f;
+    mat.emission = float3(0, 0, 0); //TODO: brightness?
+    mat.trans = 0;
+    mat.ns = 1;
+    mat.ni = 1;
+    mat.metal = 1.0;
+    mat.indicator = 0;
+
+    UnifiedShading(payload, mat);
+}
+
+[shader("closesthit")]
+void ch_checkered(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes attrib)
+{
+    (void) attrib;
+
+    Material mat = (Material)0;
+    mat.color = float3(0.2, 0.8, 0.8);
+    mat.smooth = 0.1f;
+    mat.emission = float3(0, 0, 0); //TODO: brightness?
+    mat.trans = 0;
+    mat.ns = 1;
+    mat.ni = 1;
+    mat.metal = 0.1;
+    mat.indicator = 1;
+
+    UnifiedShading(payload, mat);
+}

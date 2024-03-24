@@ -13,7 +13,7 @@ using float16_t4 = glm::u16vec4;
 #ifdef __cplusplus
 #pragma pack(push, 4)
 #endif
-#define NUM_SAMPLES 8096
+#define NUM_SAMPLES 1//8096
 #define MAX_RECURSION_LAYERS 16
 #define PI 3.14159265f
 struct ConstantBufferStruct
