@@ -2,7 +2,7 @@
 #include "common.h"
 #include "shared.h"
 #include "Raytracable.hpp"
-
+#include <filesystem>
 class Mesh : public Raytracable
 {
 private:
@@ -10,7 +10,7 @@ private:
 	vector<Vert> verts;
 	//vector<fvec3> norms;
 public:
-	Mesh(string filepath);
+	Mesh(string filename);
 	~Mesh();
 	D3D12_RESOURCE_BARRIER BuildBLAS(ComPtr<ID3D12Device10> device, ComPtr<ID3D12GraphicsCommandList4> commandList);
 	D3D12_BUFFER_SRV getGeomBufferInfo();

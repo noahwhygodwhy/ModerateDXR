@@ -15,7 +15,7 @@
 TODO list
 textures
 better sampling handling
-denoiser
+denoiser + ^
 spectrum rays
 image(/video?) output
 skeleton lmao
@@ -69,7 +69,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     vector<Instance*> instances;
 
 
-
+    //Mesh sustoe = Mesh("sustoe")
 
     Mesh cube = Mesh("cube.obj");
     models.push_back(&cube);

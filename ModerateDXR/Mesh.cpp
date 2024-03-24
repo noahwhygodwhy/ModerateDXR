@@ -105,6 +105,8 @@ void Mesh::processMesh(aiMesh* mesh, const aiScene* scene)
     }
     if (mesh->mMaterialIndex >= 0)
     {
+        aiMaterial* m = scene->mMaterials[mesh->mMaterialIndex];
+        //mesh->mMaterial
         // TODO: 
     }
 }
@@ -135,8 +137,13 @@ void Mesh::processNode(aiNode* node, const aiScene* scene)
     }
 }
 
-Mesh::Mesh(string filepath)
-{
+Mesh::Mesh(string filename)
+{    
+    string meshname = filename.substr(0, filename.find('.'));
+    string filetype = filename.substr(filename.find('.'));
+    
+    string filepath = "models/" + meshname + "/" + meshname + filetype;
+    OutputDebugStringF("filename: %s\nmeshname: %s\n, filetype: %s\nfilepath: %s\n", filename, meshname, filetype, filepath);
 	Assimp::Importer importer;
 	const aiScene* scene = importer.ReadFile(filepath, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenSmoothNormals);
 	processNode(scene->mRootNode, scene);

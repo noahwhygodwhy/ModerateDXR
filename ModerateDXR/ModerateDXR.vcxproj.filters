@@ -64,12 +64,6 @@
     <CopyFileToFolders Include="shaders.hlsl">
       <Filter>Header Files\shaders</Filter>
     </CopyFileToFolders>
-    <CopyFileToFolders Include="sphere.obj">
-      <Filter>Resource Files</Filter>
-    </CopyFileToFolders>
-    <CopyFileToFolders Include="capybara.obj" />
-    <CopyFileToFolders Include="cube.obj" />
-    <CopyFileToFolders Include="monkey.obj" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="CookTorrance.hlsl">
