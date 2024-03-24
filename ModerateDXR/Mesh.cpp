@@ -7,15 +7,15 @@
 void Mesh::CreateResources(ComPtr<ID3D12Device10> device)
 {
     CD3DX12_HEAP_PROPERTIES geomProps(D3D12_HEAP_TYPE_UPLOAD);
-    CD3DX12_RESOURCE_DESC geomDesc = CD3DX12_RESOURCE_DESC::Buffer(this->verts.size() * sizeof(vec3) * 2); // * 2 cause verts, then norms
+    CD3DX12_RESOURCE_DESC geomDesc = CD3DX12_RESOURCE_DESC::Buffer(this->verts.size() * sizeof(Vert)); // * 2 cause verts, then norms
     TIF(device->CreateCommittedResource(&geomProps, D3D12_HEAP_FLAG_NONE, &geomDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&geomBuffer)));
     geomBuffer->SetName(L"geomBuffer");
     void* uploadPointer;
     geomBuffer->Map(0, nullptr, &uploadPointer);
-    memcpy(uploadPointer, this->verts.data(), this->verts.size() * sizeof(vec3));
+    memcpy(uploadPointer, this->verts.data(), this->verts.size() * sizeof(Vert));
 
-    void* normalPointer = (void*) (((char*)uploadPointer) + (this->verts.size()*sizeof(vec3)));
-    memcpy(normalPointer, this->norms.data(), this->norms.size() * sizeof(vec3));
+    //void* normalPointer = (void*) (((char*)uploadPointer) + (this->verts.size()*sizeof(vec3)));
+    //memcpy(normalPointer, this->norms.data(), this->norms.size() * sizeof(vec3));
 
     geomBuffer->Unmap(0, nullptr);
 
@@ -29,7 +29,7 @@ void Mesh::CreateResources(ComPtr<ID3D12Device10> device)
         .IndexBuffer = 0,
         .VertexBuffer = D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE {
             .StartAddress = this->geomBuffer->GetGPUVirtualAddress(),
-            .StrideInBytes = sizeof(vec3)
+            .StrideInBytes = sizeof(Vert)
         }
     };
 
@@ -99,8 +99,8 @@ void Mesh::processMesh(aiMesh* mesh, const aiScene* scene)
         aiFace f = mesh->mFaces[j];
         for (uint k = 0; k < f.mNumIndices; k++)
         {
-            verts.push_back(unindexedVerts[f.mIndices[k]]);
-            norms.push_back(unindexedNorms[f.mIndices[k]]);
+            verts.push_back(Vert{ .pos = unindexedVerts[f.mIndices[k]], .norm = unindexedNorms[f.mIndices[k]] });
+            //norms.push_back(unindexedNorms[f.mIndices[k]]);
         }
     }
     if (mesh->mMaterialIndex >= 0)
@@ -113,7 +113,7 @@ D3D12_BUFFER_SRV Mesh::getGeomBufferInfo()
 {
     D3D12_BUFFER_SRV retVal = {
         .FirstElement = 0,
-        .NumElements = (uint32_t) (verts.size()/3) * 2,
+        .NumElements = (uint32_t) (verts.size()/3),
         .StructureByteStride = sizeof(Tringle),
         .Flags = D3D12_BUFFER_SRV_FLAG_NONE
     };
@@ -138,7 +138,7 @@ void Mesh::processNode(aiNode* node, const aiScene* scene)
 Mesh::Mesh(string filepath)
 {
 	Assimp::Importer importer;
-	const aiScene* scene = importer.ReadFile(filepath, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenNormals);
+	const aiScene* scene = importer.ReadFile(filepath, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenSmoothNormals);
 	processNode(scene->mRootNode, scene);
 }
 

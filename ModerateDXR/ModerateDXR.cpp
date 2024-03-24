@@ -51,8 +51,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 #if _DEBUG
     HMODULE pixLib = LoadLibrary(GetLatestWinPixGpuCapturerPath_Cpp17().c_str());
 #endif
-    const uint defaultWidth = 1920;
-    const uint defaultHeight = 1080;
+    const uint defaultWidth = 1280;
+    const uint defaultHeight = 1280;
 
     WNDCLASSEX classDescriptor = {
         .cbSize = sizeof(WNDCLASSEX),
@@ -100,7 +100,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     Instance iCapy(
         capy, 
         Transform{ .translate = fvec3(0, 0, 0), .rotateDegrees = 30 }(),
-        HG_SHINYRED, //hit group
+        HG_GLASS, //hit group
         2);//instance id
     instances.push_back(&iCapy);
 
@@ -121,7 +121,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     Instance iFloor(
         cube,
         Transform{ .translate = fvec3(0, -1, 0), .rotateDegrees = 0, .rotateAxis = fvec3(0, 1, 0), .scale = fvec3(20, 1, 20)}(),
-        HG_WHITE, //hit group
+        HG_CHECKERED, //hit group
         0);//instance id
     instances.push_back(&iFloor);
 
@@ -132,7 +132,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     ctx->ExecuteCommandList();
     ctx->Flush();
 
-    ctx->constants->camPos = float3(0, 10, 10);
+    ctx->constants->camPos = float3(-4, 8, 4);
     ctx->constants->fov = glm::radians(90.0f);
     ctx->constants->lookAt = float3(0, 2.5, 0);
     ctx->constants->ct = 0.0f;
@@ -156,16 +156,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         float dt = float(dTDurr.count());
 
 
-        //ctx->constants->camPos = float3(sin(ct) * 5, 1, cos(ct) * 5);
-        ctx->UploadInstanceDescs(ctx->instanceDescs);
+        //ctx->constants->camPos = float3(sin(ct) * 6, 6, cos(ct) * 6);
         //ctx->PopulateAndCopyRandBuffer();
         ctx->constants->ct = ct;
         ctx->constants->frameNumber++;
-        //ctx->alterInstanceTransform(0, glm::rotate(mat4(1), radians(90.0f) * dt, fvec3(0, 1, 0)));;
+        ctx->alterInstanceTransform(0, glm::rotate(mat4(1), radians(90.0f) * dt, fvec3(0, 1, 0)));;
         //iCapy.transform = glm::rotate(iCapy.transform, radians(90.0f) * dt, fvec3(0, 1, 0));
         // 
         //auto g = ctx->instanceDescs[0].Transform;
         //glm::mat3x4(ctx->instanceDescs[0].Transform);
+        ctx->UploadInstanceDescs();
         if (ctx->constants->frameNumber % NUM_SAMPLES == 0)
         {
             //OutputDebugStringF("done with that frame\n");

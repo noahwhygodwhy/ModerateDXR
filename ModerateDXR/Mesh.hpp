@@ -7,8 +7,8 @@ class Mesh : public Raytracable
 {
 private:
 	//vector<uint32_t> indices;
-	vector<fvec3> verts;
-	vector<fvec3> norms;
+	vector<Vert> verts;
+	//vector<fvec3> norms;
 public:
 	Mesh(string filepath);
 	~Mesh();

@@ -277,7 +277,7 @@ DxrContext::~DxrContext()
 {
 }
 
-void DxrContext::UploadInstanceDescs(vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs)
+void DxrContext::UploadInstanceDescs()
 {
     //TODO: check the list hasn't changed in size?
 
@@ -289,7 +289,8 @@ void DxrContext::UploadInstanceDescs(vector<D3D12_RAYTRACING_INSTANCE_DESC> inst
 
 void DxrContext::CreateTlasResources(vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs)
 {
-;
+
+    this->instanceDescs = instanceDescs;
     CD3DX12_HEAP_PROPERTIES instanceProps(D3D12_HEAP_TYPE_UPLOAD);
     CD3DX12_RESOURCE_DESC instanceDesc = CD3DX12_RESOURCE_DESC::Buffer(instanceDescs.size() * sizeof(D3D12_RAYTRACING_INSTANCE_DESC));
     TIF(device->CreateCommittedResource(&instanceProps, D3D12_HEAP_FLAG_NONE, &instanceDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&instanceBuffer)));
@@ -431,7 +432,7 @@ void DxrContext::PopulateAndCopyRandBuffer()
     }
     randUploadBuffer->Unmap(0, nullptr);
 
-
+    //TODO: this doesn't like it when the size isn't divisible by 32
     auto footprint = CD3DX12_SUBRESOURCE_FOOTPRINT(randBuffer->GetDesc(), RoundUp(this->screenWidth * sizeof(uint64_t), D3D12_TEXTURE_DATA_PITCH_ALIGNMENT));
     D3D12_PLACED_SUBRESOURCE_FOOTPRINT placedTexture2D = { 0 };
     placedTexture2D.Offset = 0;

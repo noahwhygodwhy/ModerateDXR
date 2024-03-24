@@ -6,12 +6,6 @@
 constexpr float resizeDebounce = 0.1f;
 
 
-#define HG_WHITE     0
-#define HG_SHINYRED  1
-#define HG_LIGHT     2
-#define HG_METAL     3
-#define HG_MIRROR    4
-#define HG_CHECKERED 5
 
 
 
@@ -31,6 +25,14 @@ struct HitGroupData
 	}
 };
 
+#define HG_WHITE     0
+#define HG_SHINYRED  1
+#define HG_LIGHT     2
+#define HG_METAL     3
+#define HG_MIRROR    4
+#define HG_CHECKERED 5
+#define HG_GLASS     6
+
 const static HitGroupData hgdata[] =
 {
 	HitGroupData(L"white"),
@@ -39,6 +41,7 @@ const static HitGroupData hgdata[] =
 	HitGroupData(L"metal"),
 	HitGroupData(L"mirror"),
 	HitGroupData(L"checkered"),
+	HitGroupData(L"glass"),
 };
 
 //This is specifically meant for d3d12 dxr instance descs
@@ -78,7 +81,7 @@ public:
 	void Flush();
 	void Render(float ct);
 	void CreateTlasResources(vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs);
-	void UploadInstanceDescs(vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs);
+	void UploadInstanceDescs();
 	ComPtr<ID3D12Device10> device;
 	ComPtr<ID3D12GraphicsCommandList4> commandList;
 	ComPtr<ID3D12DescriptorHeap> descHeap;
