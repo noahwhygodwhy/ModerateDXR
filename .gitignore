@@ -1,3 +1,5 @@
 .vs/
 x64/
 packages/
+.vscode/
+enc_temp_folder/
