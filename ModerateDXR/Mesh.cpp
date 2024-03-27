@@ -105,7 +105,8 @@ void Mesh::processMesh(aiMesh* mesh, const aiScene* scene)
     }
     if (mesh->mMaterialIndex >= 0)
     {
-        aiMaterial* m = scene->mMaterials[mesh->mMaterialIndex];
+        //aiMaterial* m = scene->mMaterials[mesh->mMaterialIndex];
+        //m->GetTextureCount(aiTextureType_DIFFUSE);//
         //mesh->mMaterial
         // TODO: 
     }
@@ -143,7 +144,7 @@ Mesh::Mesh(string filename)
     string filetype = filename.substr(filename.find('.'));
     
     string filepath = "models/" + meshname + "/" + meshname + filetype;
-    OutputDebugStringF("filename: %s\nmeshname: %s\n, filetype: %s\nfilepath: %s\n", filename, meshname, filetype, filepath);
+    OutputDebugStringF("filename: %s\nmeshname: %s\n, filetype: %s\nfilepath: %s\n", filename.c_str(), meshname.c_str(), filetype.c_str(), filepath.c_str());
 	Assimp::Importer importer;
 	const aiScene* scene = importer.ReadFile(filepath, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenSmoothNormals);
 	processNode(scene->mRootNode, scene);

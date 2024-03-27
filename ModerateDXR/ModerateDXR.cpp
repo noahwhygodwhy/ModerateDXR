@@ -13,9 +13,11 @@
 
 /* 
 TODO list
-textures
+
 better sampling handling
 denoiser + ^
+async build/dispatch
+textures
 spectrum rays
 image(/video?) output
 skeleton lmao
@@ -71,6 +73,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
     //Mesh sustoe = Mesh("sustoe")
 
+    Mesh toe = Mesh("toe3d.obj");
+    return 0;
     Mesh cube = Mesh("cube.obj");
     models.push_back(&cube);
     Mesh sphere = Mesh("sphere.obj");

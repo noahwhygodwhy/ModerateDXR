@@ -13,6 +13,8 @@ using float16_t4 = glm::u16vec4;
 #ifdef __cplusplus
 #pragma pack(push, 4)
 #endif
+
+#define FREQUENCIES 48
 #define NUM_SAMPLES 32//8096
 #define MAX_RECURSION_LAYERS 12
 #define PI 3.14159265f
@@ -38,12 +40,21 @@ struct Vert
 {
     float3 pos;
     float3 norm;
+    uint diffuseTextureIdx;
+    uint normalTextureIdx;
+    uint specularTextureIdx;
+    uint metalicTextureIdx;
+    uint roughnessTextureIdx;
+    uint alphaTextureIdx;
+    uint emmisiveTextureIdx;
+
 };
 
 struct Tringle
 {
     Vert verts[3];
 };
+static uint x = sizeof(Tringle)/sizeof(uint);
 
 struct Material
 {
