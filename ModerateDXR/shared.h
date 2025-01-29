@@ -32,9 +32,20 @@ struct RayPayload
     float3 accum;
     uint layer;
     float3 mask;
-    uint32_t padd : 31;
+    uint32_t padd : 30;
+    uint32_t recordHit : 1;
     uint32_t insideGlass : 1;
 };
+
+struct HitInfo
+{
+    uint32_t instanceID :24;
+    uint32_t matID :8;
+    uint32_t geometryIndex :24;
+    uint32_t didRefraction :1;
+    uint32_t padd0 :7;
+};
+
 
 struct Vert
 {

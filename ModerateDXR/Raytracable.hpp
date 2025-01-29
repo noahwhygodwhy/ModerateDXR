@@ -1,7 +1,7 @@
 #pragma once
 #include "common.h"
 
-#define NUM_RESOURCES_BEFORE_GEOM 2
+#define NUM_RESOURCES_BEFORE_GEOM 3
 
 class Raytracable 
 {

@@ -1,6 +1,7 @@
 #pragma once
 #include "common.h"
 #include "shared.h"
+#include "Denoiser.hpp"
 
 
 constexpr float resizeDebounce = 0.1f;
@@ -85,7 +86,7 @@ public:
 	ComPtr<ID3D12Device10> device;
 	ComPtr<ID3D12GraphicsCommandList4> commandList;
 	ComPtr<ID3D12DescriptorHeap> descHeap;
-	ComPtr<ID3D12DescriptorHeap> cpuDescHeap;
+	//ComPtr<ID3D12DescriptorHeap> cpuDescHeap;
 	ConstantBufferStruct* constants;
 	vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs;
 	std::chrono::steady_clock::time_point startTimePoint;
@@ -126,19 +127,35 @@ private:
 	uint sizeOfResourceDesc;
 
 	ComPtr<ID3D12Resource> randUploadBuffer;
-//#define NUM_RESOURCES_BEFORE_GEOM 2
+//#define NUM_RESOURCES_BEFORE_GEOM 3
 	ComPtr<ID3D12Resource> randBuffer;
+	ComPtr<ID3D12Resource> colorBuffer;
+	ComPtr<ID3D12Resource> hitInfoBuffer;
+
+
 	ComPtr<ID3D12Resource> framebuffer;
 // the above are the two resources before the geom buffers in the desc heap
 	ComPtr<ID3D12Resource> tlas;
 	ComPtr<ID3D12Resource> tlasScratch;
 
 	HANDLE swapChainEvent;
-
+	
+	Denoiser* denoiser;
 
 	void BuildRootSignature();
 	void BuildPipelineStateObject();
+
+
+	enum class DescHeapIds : uint
+	{
+		Color,
+		Rand,
+		HitInfo,
+		//Count
+	};
+
 };
+
 
 //inline mat3x4 fromInstanceTransform(float val[3][4])
 //{

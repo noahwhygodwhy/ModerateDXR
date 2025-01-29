@@ -114,7 +114,9 @@
       <AdditionalDependencies>WinPixEventRuntime.lib;dxcompiler.lib;d3d12.lib;dxgi.lib;d3dcompiler.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PreBuildEvent>
-      <Command>dxc -HV 2021 -enable-16bit-types -T lib_6_6 -Wall -Wextra -Zi -Qembed_debug shaders.hlsl -Fh shader.h /Vn compiledShader</Command>
+      <Command>dxc -HV 2021 -enable-16bit-types -T lib_6_6 -Od -Wall -Wextra -Zi -Qembed_debug raytrace.hlsl -Fh raytrace.h /Vn compiledRaytrace 
+dxc -HV 2021 -enable-16bit-types -E Denoise -T cs_6_6 -Od -Wall -Wextra -Zi -Qembed_debug denoise.hlsl -Fh denoise.h /Vn compiledDenoise
+</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -135,11 +137,14 @@
       <AdditionalDependencies>WinPixEventRuntime.lib;dxcompiler.lib;d3d12.lib;dxgi.lib;d3dcompiler.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PreBuildEvent>
-      <Command>dxc -HV 2021 -Od -enable-16bit-types -T lib_6_6 -Wall -Wextra -Zi shaders.hlsl -Fh shader.h /Vn compiledShader</Command>
+      <Command>dxc -HV 2021 -enable-16bit-types -T lib_6_6 -Wall -Wextra raytrace.hlsl -Fh raytrace.h /Vn compiledRaytrace
+dxc -HV 2021 -enable-16bit-types -E Denoise -T cs_6_6 -Wall -Wextra denoise.hlsl -Fh denoise.h /Vn compiledDenoise
+</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="common.h" />
+    <ClInclude Include="Denoiser.hpp" />
     <ClInclude Include="DxrContext.hpp" />
     <ClInclude Include="Mesh.hpp" />
     <ClInclude Include="pixtras.hpp" />
@@ -147,6 +152,7 @@
     <ClInclude Include="shared.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Denoiser.cpp" />
     <ClCompile Include="DXRContext.cpp" />
     <ClCompile Include="Instance.cpp" />
     <ClCompile Include="Instance.hpp" />
@@ -159,11 +165,11 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="models\**">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
   <ItemGroup>
-    <CopyFileToFolders Include="shaders.hlsl">
+    <CopyFileToFolders Include="raytrace.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
       <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</DeploymentContent>
       <FileType>Document</FileType>
@@ -173,6 +179,11 @@
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="CookTorrance.hlsl" />
+    <CopyFileToFolders Include="denoise.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
+      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</DeploymentContent>
+      <FileType>Document</FileType>
+    </CopyFileToFolders>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

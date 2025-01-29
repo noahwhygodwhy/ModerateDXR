@@ -36,6 +36,9 @@
     <ClInclude Include="pixtras.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Denoiser.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ModerateDXR.cpp">
@@ -56,12 +59,18 @@
     <ClCompile Include="Instance.hpp">
       <Filter>Header Files</Filter>
     </ClCompile>
+    <ClCompile Include="Denoiser.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <CopyFileToFolders Include="shaders.hlsl">
+    <CopyFileToFolders Include="raytrace.hlsl">
+      <Filter>Header Files\shaders</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="denoise.hlsl">
       <Filter>Header Files\shaders</Filter>
     </CopyFileToFolders>
   </ItemGroup>

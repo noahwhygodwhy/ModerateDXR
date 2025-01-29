@@ -5,11 +5,12 @@
 #include "shared.h"
 #include "CookTorrance.hlsl"
 
-ConstantBuffer<ConstantBufferStruct>  constants  : register(b0);
-globallycoherent RWTexture2D<float16_t4>               colorOut   : register(u0);
-globallycoherent RWTexture2D<uint64_t>                 randBuff   : register(u1);
-RaytracingAccelerationStructure       scene      : register(t0);
-StructuredBuffer<Tringle>             geomdata[] : register(t1);
+ConstantBuffer<ConstantBufferStruct>         constants  : register(b0);
+globallycoherent RWTexture2D<float4>         colorOut   : register(u0);
+globallycoherent RWTexture2D<uint64_t>       randBuff   : register(u1);
+globallycoherent RWStructuredBuffer<HitInfo> hitInfo    : register(u2);
+RaytracingAccelerationStructure              scene      : register(t0);
+StructuredBuffer<Tringle>                    geomdata[] : register(t1);
 
 inline uint MWC64X(in uint2 pixelID)
 {
@@ -87,7 +88,26 @@ void RayGeneration()
     // colorOut[pixelID].z = 0.1f;
     //return;
     float3 accum = float3(0, 0, 0);
-    for(uint i = 0; i < NUM_SAMPLES; i++)
+
+//center ray for consistency
+    {
+        float3 lookAtPoint = centerOfPlane + (right * offsetFromCenter.x) + (up * offsetFromCenter.y);
+        ray.Direction = normalize(lookAtPoint - pos);
+
+        RayPayload payload = (RayPayload)0;
+        payload.mask = float16_t3(1.0, 1.0, 1.0);
+        payload.layer = 0; //why doesn't the api provide a layer ugh
+        payload.accum = float16_t3(0.0, 0.0, 0.0);
+        payload.insideGlass = 0;
+        payload.recordHit = 1;
+        payload.padd = 0;
+
+        TraceRay(scene, RAY_FLAG_FORCE_OPAQUE, 0xFF, 0, 0, 0, ray, payload);
+        // //TODO: this clamp being required means somethign is *wrong*
+        accum += clamp(payload.accum, float3(0, 0, 0), float3(1, 1, 1));
+    }
+//the rest of the samples
+    for(uint i = 1; i < NUM_SAMPLES; i++)
     {
         float3 fuzzyLookAtPoint = centerOfPlane + (right * offsetFromCenter.x + randFloat0505(pixelID)) + (up * offsetFromCenter.y + randFloat0505(pixelID));
         ray.Direction = normalize(fuzzyLookAtPoint - pos);
@@ -97,6 +117,7 @@ void RayGeneration()
         payload.layer = 0; //why doesn't the api provide a layer ugh
         payload.accum = float16_t3(0.0, 0.0, 0.0);
         payload.insideGlass = 0;
+        payload.recordHit = 0;
         payload.padd = 0;
 
         TraceRay(scene, RAY_FLAG_FORCE_OPAQUE, 0xFF, 0, 0, 0, ray, payload);
@@ -106,7 +127,7 @@ void RayGeneration()
     }
     accum /= float3(NUM_SAMPLES, NUM_SAMPLES, NUM_SAMPLES);
 
-    colorOut[pixelID] = float16_t4(accum, 1.0);
+    colorOut[pixelID] = float4(accum, 1.0);
 
     // if(constants.frameNumber % NUM_SAMPLES == 0)
     // {
@@ -145,7 +166,7 @@ float3 doTransform(float3 vec3, float4x3 mat4x3)
 
 float3 getWorldSpaceNormal(float2 bary)
 {
-    uint offset = numTriangles();
+    //uint offset = numTriangles();
     Tringle tri = geomdata[NonUniformResourceIndex(InstanceID())][NonUniformResourceIndex(PrimitiveIndex())];
     //float3 pos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
     
@@ -157,7 +178,7 @@ float3 getWorldSpaceNormal(float2 bary)
                     (tri.verts[1].norm * baryA) +
                     (tri.verts[2].norm * baryB);
 
-    normal = normalize(mul(normal, ObjectToWorld4x3()));
+    normal = normalize(mul(normal, (float3x3) ObjectToWorld4x3()));
     return normal; 
 }
 
@@ -243,9 +264,30 @@ float3 generateNewRayDir(float3 oldRayDir, in float3 normal)
 void UnifiedShading(
 inout RayPayload payload,
 in Material mat,
+in uint matIdx,
 in float2 bary
 )
 {
+
+    uint w, h;
+    colorOut.GetDimensions(w, h);
+
+    uint2 pixelID = NonUniformResourceIndex(DispatchRaysIndex()).xy;
+    uint flatIndex = (pixelID.y * w) + pixelID.x;
+
+    bool recorded = false;
+    if(payload.recordHit)
+    {
+        hitInfo[flatIndex].instanceID = NonUniformResourceIndex(InstanceID());
+        hitInfo[flatIndex].geometryIndex = NonUniformResourceIndex(GeometryIndex());
+        hitInfo[flatIndex].matID = matIdx;
+        hitInfo[flatIndex].padd0 = 0;
+        payload.recordHit = 0;
+        hitInfo[flatIndex].didRefraction = 0;
+        recorded = true;
+    }
+
+
     float3 normal = getWorldSpaceNormal(bary);
     //payload.accum = abs(normal);
     //return;
@@ -262,13 +304,24 @@ in float2 bary
     bool doingTransparencyStuff = false;
 
     if(payload.insideGlass)
-    {
+    {   
+        if(recorded)
+        {
+            hitInfo[flatIndex].didRefraction = 1;
+            payload.recordHit = 1;//don't record the info of glass refractions, but of what we hit after
+        }
         payload.insideGlass = false;
         newRayDir = refract(oldRayDir, -normal, 1.0/mat.ior);
         doingTransparencyStuff = true;
     }
     else if (mat.trans >= transDecider)
     {
+        if(recorded)
+        {
+            hitInfo[flatIndex].didRefraction = 1;
+            payload.recordHit = 1;//don't record the info of glass refractions, but of what we hit after
+        }
+        payload.recordHit = 1;//don't record the info of glass refractions, but of what we hit after
         // pos -= normal*0.0001f;
         payload.insideGlass = true;
         newRayDir = refract(oldRayDir, normal, 1);//mat.ior);
@@ -299,11 +352,11 @@ in float2 bary
         //float3 R = reflect(newRayDir, normal);
 
 
-        float3 V = -oldRayDir;
+        //float3 V = -oldRayDir;
         float3 N = normal;
         float3 L = newRayDir;
 
-        float3 H = normalize((L + V));
+        //float3 H = normalize((L + V));
 
         float diff = max(dot(L, N), 0.0f);
         //float spec = max(dot(N, H), 0.0f);
@@ -345,7 +398,7 @@ void ch_white(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes
     mat.metal = 0;
     mat.indicator = 0;
 
-    UnifiedShading(payload, mat, attrib.barycentrics);
+    UnifiedShading(payload, mat, 0, attrib.barycentrics);
 }
 
 [shader("closesthit")]
@@ -361,7 +414,7 @@ void ch_shinyred(inout RayPayload payload, in BuiltInTriangleIntersectionAttribu
     mat.metal = 0.1;
     mat.indicator = 0;
 
-    UnifiedShading(payload, mat, attrib.barycentrics);
+    UnifiedShading(payload, mat, 1, attrib.barycentrics);
 }
 
 [shader("closesthit")]
@@ -377,7 +430,7 @@ void ch_light(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes
     mat.metal = 0.1;
     mat.indicator = 0;
 
-    UnifiedShading(payload, mat, attrib.barycentrics);
+    UnifiedShading(payload, mat, 2, attrib.barycentrics);
 }
 
 [shader("closesthit")]
@@ -393,7 +446,7 @@ void ch_metal(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes
     mat.metal = 0.9;
     mat.indicator = 0;
 
-    UnifiedShading(payload, mat, attrib.barycentrics);
+    UnifiedShading(payload, mat, 3, attrib.barycentrics);
 }
 
 [shader("closesthit")]
@@ -409,7 +462,7 @@ void ch_mirror(inout RayPayload payload, in BuiltInTriangleIntersectionAttribute
     mat.metal = 1.0;
     mat.indicator = 0;
 
-    UnifiedShading(payload, mat, attrib.barycentrics);
+    UnifiedShading(payload, mat, 4, attrib.barycentrics);
 }
 
 [shader("closesthit")]
@@ -425,7 +478,7 @@ void ch_checkered(inout RayPayload payload, in BuiltInTriangleIntersectionAttrib
     mat.metal = 0.1;
     mat.indicator = 1;
 
-    UnifiedShading(payload, mat, attrib.barycentrics);
+    UnifiedShading(payload, mat, 5, attrib.barycentrics);
 }
 
 [shader("closesthit")]
@@ -441,5 +494,5 @@ void ch_glass(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes
     mat.metal = 0.1;
     mat.indicator = 0;
 
-    UnifiedShading(payload, mat, attrib.barycentrics);
+    UnifiedShading(payload, mat, 6, attrib.barycentrics);
 }

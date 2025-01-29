@@ -1,10 +1,12 @@
 #include "DxrContext.hpp"
 #include "shared.h"
-#include "shader.h"
+#include "denoise.h"
+#include "raytrace.h"
 
 
 void DxrContext::CreateScreenSizedResources()
 {
+//FRAMEBUFFER=============================================================
     D3D12_HEAP_PROPERTIES fbProps{
         .Type = D3D12_HEAP_TYPE_DEFAULT,
         .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
@@ -35,16 +37,80 @@ void DxrContext::CreateScreenSizedResources()
 
     framebuffer->SetName(L"framebuffer");
 
-    D3D12_UNORDERED_ACCESS_VIEW_DESC framebufferViewDesc = {
-        .Format = DXGI_FORMAT_R16G16B16A16_FLOAT,
+//COLORBUFFER=============================================================
+    D3D12_HEAP_PROPERTIES colorBufferProps{
+        .Type = D3D12_HEAP_TYPE_DEFAULT,
+        .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+        .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
+        .CreationNodeMask = 0,
+        .VisibleNodeMask = 0
+    };
+
+
+    D3D12_RESOURCE_DESC colorBufferDesc{
+        .Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+        .Alignment = 0,
+        .Width = this->screenWidth,
+        .Height = this->screenHeight,
+        .DepthOrArraySize = 1,
+        .MipLevels = 1,
+        .Format = DXGI_FORMAT_R32G32B32A32_FLOAT,
+        .SampleDesc = DXGI_SAMPLE_DESC{.Count = 1, .Quality = 0},
+        .Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
+        .Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+    };
+
+    TIF(this->device->CreateCommittedResource(
+        &colorBufferProps,
+        D3D12_HEAP_FLAG_NONE,
+        &colorBufferDesc,
+        D3D12_RESOURCE_STATE_COMMON,
+        nullptr,
+        IID_PPV_ARGS(&colorBuffer)));
+
+    framebuffer->SetName(L"colorBuffer");
+
+    D3D12_UNORDERED_ACCESS_VIEW_DESC colorBufferViewDesc = {
+        .Format = DXGI_FORMAT_R32G32B32A32_FLOAT,
         .ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D,
         .Texture2D = {0, 0}
     };
 
-    D3D12_CPU_DESCRIPTOR_HANDLE framebufferDescHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(descHeap->GetCPUDescriptorHandleForHeapStart(), 0, sizeOfResourceDesc);
-    device->CreateUnorderedAccessView(framebuffer.Get(), nullptr, &framebufferViewDesc, framebufferDescHandle);
-    D3D12_CPU_DESCRIPTOR_HANDLE cpuFramebufferDescHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cpuDescHeap->GetCPUDescriptorHandleForHeapStart(), 0, sizeOfResourceDesc);
-    device->CreateUnorderedAccessView(framebuffer.Get(), nullptr, &framebufferViewDesc, cpuFramebufferDescHandle);
+    D3D12_CPU_DESCRIPTOR_HANDLE colorBufferDescHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(descHeap->GetCPUDescriptorHandleForHeapStart(), (uint)DescHeapIds::Color, sizeOfResourceDesc);
+    device->CreateUnorderedAccessView(colorBuffer.Get(), nullptr, &colorBufferViewDesc, colorBufferDescHandle);
+
+//hitInfo=============================================================
+    D3D12_HEAP_PROPERTIES hitInfoProps{
+        .Type = D3D12_HEAP_TYPE_DEFAULT,
+        .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+        .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
+        .CreationNodeMask = 0,
+        .VisibleNodeMask = 0
+    };
+    D3D12_RESOURCE_DESC hitInfoDesc = CD3DX12_RESOURCE_DESC::Buffer(this->screenWidth * this->screenHeight * sizeof(HitInfo), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+
+    TIF(this->device->CreateCommittedResource(
+        &hitInfoProps,
+        D3D12_HEAP_FLAG_NONE,
+        &hitInfoDesc,
+        D3D12_RESOURCE_STATE_COMMON,
+        nullptr,
+        IID_PPV_ARGS(&hitInfoBuffer)));
+
+    framebuffer->SetName(L"hitinfobuffer");
+
+    D3D12_UNORDERED_ACCESS_VIEW_DESC hitInfoViewDesc = {
+        .Format = DXGI_FORMAT_UNKNOWN,
+        .ViewDimension = D3D12_UAV_DIMENSION_BUFFER,
+        .Buffer = {.FirstElement = 0, .NumElements = this->screenWidth * this->screenHeight, .StructureByteStride = sizeof(HitInfo), .Flags = D3D12_BUFFER_UAV_FLAG_NONE},
+    };
+
+    D3D12_CPU_DESCRIPTOR_HANDLE hitInfoDescHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(descHeap->GetCPUDescriptorHandleForHeapStart(), (uint)DescHeapIds::HitInfo, sizeOfResourceDesc);
+    device->CreateUnorderedAccessView(hitInfoBuffer.Get(), nullptr, &hitInfoViewDesc, hitInfoDescHandle);
+
+
+
+//RANDBUFFER=============================================================
 
     D3D12_HEAP_PROPERTIES randBufferProps{
         .Type = D3D12_HEAP_TYPE_DEFAULT,
@@ -82,47 +148,51 @@ void DxrContext::CreateScreenSizedResources()
         .Texture2D = {0, 0}
     };
 
-    D3D12_CPU_DESCRIPTOR_HANDLE randbufferDescHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(descHeap->GetCPUDescriptorHandleForHeapStart(), 1, sizeOfResourceDesc);
+    D3D12_CPU_DESCRIPTOR_HANDLE randbufferDescHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(descHeap->GetCPUDescriptorHandleForHeapStart(), (uint)DescHeapIds::Rand, sizeOfResourceDesc);
     device->CreateUnorderedAccessView(randBuffer.Get(), nullptr, &randbufferViewDesc, randbufferDescHandle);
 
-    D3D12_RESOURCE_BARRIER fbSetupbarrier = D3D12_RESOURCE_BARRIER{ .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION, .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE, .Transition = {.pResource = framebuffer.Get(), .StateBefore = D3D12_RESOURCE_STATE_COMMON, .StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS} };
-    commandList->ResourceBarrier(1, &fbSetupbarrier);
+    D3D12_RESOURCE_BARRIER setupBarriers[3] = {
+        D3D12_RESOURCE_BARRIER{.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION, .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE, .Transition = {.pResource = colorBuffer.Get(), .StateBefore = D3D12_RESOURCE_STATE_COMMON, .StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS}},
+        D3D12_RESOURCE_BARRIER{.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION, .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE, .Transition = {.pResource = framebuffer.Get(), .StateBefore = D3D12_RESOURCE_STATE_COMMON, .StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS}},
+        D3D12_RESOURCE_BARRIER{.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION, .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE, .Transition = {.pResource = hitInfoBuffer.Get(), .StateBefore = D3D12_RESOURCE_STATE_COMMON, .StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS}}
+
+    };
+    commandList->ResourceBarrier(_countof(setupBarriers), setupBarriers);
 
 
+    this->denoiser->SetScreenSizedResources(this->device, this->colorBuffer, this->framebuffer, this->hitInfoBuffer);
 
 }
 
 void DxrContext::DoResize(float ct)
 {
-    if(!this->backbuffer) {return;}
-    Flush();
-    OutputDebugStringF("do resize\n %u, %u\n", this->newWidth, this->newHeight);
-    this->screenHeight = newHeight;
-    this->screenWidth = newWidth;
-    this->backbuffer.Reset();
-    swapChain->ResizeBuffers(2, this->screenWidth, this->screenHeight, DXGI_FORMAT_R16G16B16A16_FLOAT, 0);
-    this->CreateScreenSizedResources();
-    this->PopulateAndCopyRandBuffer();//TODO: double check this is correct here
-    this->needResize = false;
+    //if(!this->backbuffer) {return;}
+    //Flush();
+    //OutputDebugStringF("do resize\n %u, %u\n", this->newWidth, this->newHeight);
+    //this->screenHeight = newHeight;
+    //this->screenWidth = newWidth;
+    //this->backbuffer.Reset();
+    //swapChain->ResizeBuffers(2, this->screenWidth, this->screenHeight, DXGI_FORMAT_R16G16B16A16_FLOAT, 0);
+    //this->CreateScreenSizedResources();
+    //this->PopulateAndCopyRandBuffer();//TODO: double check this is correct here
+    //this->needResize = false;
     
 }
 void DxrContext::SetResize(uint width, uint height)
 {
-    OutputDebugStringF("set resize\n %u, %u\n", width, height);
-    this->newWidth = width;
-    this->newHeight = height;
-    this->needResize = true;
+    //OutputDebugStringF("set resize\n %u, %u\n", width, height);
+    //this->newWidth = width;
+    //this->newHeight = height;
+    //this->needResize = true;
 }
 
 void DxrContext::BuildRootSignature()
 {
-    ComPtr<ID3DBlob> blob;
-
-
-    CD3DX12_DESCRIPTOR_RANGE1 descRanges[3];
-    descRanges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, /*u*/0, 0); //u0 framebuffer
-    descRanges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, /*u*/1, 0); //u1 framebuffer
-    descRanges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, /*t*/1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE); //t1 | geombuffer[]
+    CD3DX12_DESCRIPTOR_RANGE1 descRanges[4]; ////////////////////what
+    descRanges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, /*u*/0, 0); //u0 colorbuffer
+    descRanges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, /*u*/1, 0); //u1 randbuffer
+    descRanges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, /*u*/2, 0); //u2 objectIDbuffer
+    descRanges[3].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, /*t*/1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE); //t1 | geombuffer[]
 
 
     CD3DX12_ROOT_PARAMETER1 rootParams[3];
@@ -130,7 +200,6 @@ void DxrContext::BuildRootSignature()
     rootParams[1].InitAsShaderResourceView(0, 0);  // t0 | tlas
     rootParams[2].InitAsDescriptorTable(_countof(descRanges), descRanges); //
 
-    //OutputDebugStringF("\n\nflags: %u\n\n\n", rootParams[3].DescriptorTable.pDescriptorRanges[0].Flags);
 
     
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC RootSigDesc(_countof(rootParams), rootParams);
@@ -142,7 +211,7 @@ void DxrContext::BuildRootSignature()
 
 void DxrContext::BuildPipelineStateObject()
 {
-    D3D12_DXIL_LIBRARY_DESC libraryDesc = { .DXILLibrary = {.pShaderBytecode = compiledShader,.BytecodeLength = std::size(compiledShader)} };
+    D3D12_DXIL_LIBRARY_DESC libraryDesc = { .DXILLibrary = {.pShaderBytecode = compiledRaytrace,.BytecodeLength = std::size(compiledRaytrace)} };
     D3D12_STATE_SUBOBJECT librarySO = { .Type = D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY, .pDesc = &libraryDesc };
 
     D3D12_RAYTRACING_SHADER_CONFIG shadercfgDesc = { .MaxPayloadSizeInBytes = sizeof(RayPayload), .MaxAttributeSizeInBytes = 8 }; //8 here is the 2 float barycentric for the default attribute struct for triangle hits
@@ -200,7 +269,7 @@ DxrContext::DxrContext(HWND hwnd, uint initWidth, uint initHeight)
 {
     this->screenWidth = initWidth;
     this->screenHeight = initHeight;
-    this->newWidth = newWidth;
+    this->newWidth = initWidth;
     this->newHeight = initHeight;
     ComPtr<IDXGIFactory4> factory4;
     TIF(CreateDXGIFactory2(0, IID_PPV_ARGS(&factory4)));
@@ -239,13 +308,6 @@ DxrContext::DxrContext(HWND hwnd, uint initWidth, uint initHeight)
     };
     TIF(device->CreateDescriptorHeap(&descHeapDesc, IID_PPV_ARGS(&descHeap)));
 
-    D3D12_DESCRIPTOR_HEAP_DESC cpuDescHeapDesc = {
-        .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-        .NumDescriptors = 1, //just the framebuffer
-        .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE
-    };
-    TIF(device->CreateDescriptorHeap(&cpuDescHeapDesc, IID_PPV_ARGS(&cpuDescHeap)));
-
     this->sizeOfResourceDesc = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     this->BuildRootSignature();
     this->BuildPipelineStateObject();
@@ -262,6 +324,10 @@ DxrContext::DxrContext(HWND hwnd, uint initWidth, uint initHeight)
     TIF(device->CreateCommittedResource(&cbProps, D3D12_HEAP_FLAG_NONE, &cbDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&constantBuffer)));
     constantBuffer->SetName(L"constantBuffer");
     constantBuffer->Map(0, nullptr, (void**)&this->constants);
+
+    this->denoiser = new Denoiser(this->device);
+
+
 }
 
 
@@ -332,7 +398,6 @@ void DxrContext::BuildTlas()
         .ScratchAccelerationStructureData = this->tlasScratch->GetGPUVirtualAddress()
     };
     commandList->BuildRaytracingAccelerationStructure(&buildDesc, 0, nullptr);
-    //exit(-1);
     D3D12_RESOURCE_BARRIER tlasBarrier = D3D12_RESOURCE_BARRIER{ .Type = D3D12_RESOURCE_BARRIER_TYPE_UAV, .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE, .UAV = {.pResource = this->tlas.Get()} };
 
     commandList->ResourceBarrier(1, &tlasBarrier);
@@ -347,8 +412,7 @@ void DxrContext::ResetCommandList()
 void DxrContext::ExecuteCommandList()
 {
     TIF(commandList->Close());
-    ID3D12GraphicsCommandList4* cl = this->commandList.Get();//why
-    commandQueue->ExecuteCommandLists(1, CommandListCast(&cl));
+    commandQueue->ExecuteCommandLists(1, CommandListCast(this->commandList.GetAddressOf()));
 }
 
 void DxrContext::DispatchRays()
@@ -357,10 +421,6 @@ void DxrContext::DispatchRays()
     commandList->SetComputeRootSignature(rootSignature.Get());
     commandList->SetDescriptorHeaps(1, descHeap.GetAddressOf());
     D3D12_GPU_DESCRIPTOR_HANDLE descHandle = descHeap->GetGPUDescriptorHandleForHeapStart();
-    float empty[4] = { 0, 0, 0, 0 };
-    //commandList->ClearUnorderedAccessViewFloat(descHeap->GetGPUDescriptorHandleForHeapStart(), cpuDescHeap->GetCPUDescriptorHandleForHeapStart(), this->framebuffer.Get(), empty, 0, NULL);
-    D3D12_RESOURCE_BARRIER clearBarrier = CD3DX12_RESOURCE_BARRIER::UAV(framebuffer.Get());
-    commandList->ResourceBarrier(1, &clearBarrier);
     commandList->SetComputeRootConstantBufferView(0, constantBuffer->GetGPUVirtualAddress());//TODO: need a constant buffer
     commandList->SetComputeRootShaderResourceView(1, tlas->GetGPUVirtualAddress());
     commandList->SetComputeRootDescriptorTable(2, descHandle);
@@ -389,20 +449,7 @@ void DxrContext::PopulateAndCopyRandBuffer()
 {
     if (randUploadBuffer) { randUploadBuffer.Reset(); }
 
-    //D3D12_RESOURCE_DESC randUploadBuffDesc = randBuffer->GetDesc();
     CD3DX12_RESOURCE_DESC randUploadBuffDesc = CD3DX12_RESOURCE_DESC::Buffer(this->screenWidth * this->screenHeight * sizeof(uint64_t));
-    /*D3D12_RESOURCE_DESC randUploadBuffDesc {
-    .Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
-    .Alignment = 0,
-    .Width = this->screenWidth*this->screenHeight * sizeof(uint64_t),
-    .Height = this->screenHeight,
-    .DepthOrArraySize = 1,
-    .MipLevels = 1,
-    .Format = DXGI_FORMAT_R16G16B16A16_UINT,
-    .SampleDesc = DXGI_SAMPLE_DESC{.Count = 1, .Quality = 0},
-    .Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
-    .Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
-    };*/
 
     D3D12_HEAP_PROPERTIES randUploadBuffProps{
     .Type = D3D12_HEAP_TYPE_UPLOAD,
@@ -495,6 +542,8 @@ void DxrContext::Render(float ct)
     this->ClearFramebuffer();
     this->BuildTlas();
     this->DispatchRays();
+    this->denoiser->Denoise(this->commandList);
+    //TODO: denoise shader
     this->CopyFramebuffer();
     this->ExecuteCommandList();
     this->Flush();
